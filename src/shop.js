@@ -376,9 +376,9 @@ export async function startOrderFromSitePayload(env, db, message, parsed) {
         await sendMessage(
           env,
           chatId,
-          `👋 হ্যালো ${escapeHtml(fullName)} — মনে হচ্ছে আপনার কাছে ইতিমধ্যেই ${escapeHtml(
+          `👋 হ্যালো ${escapeHtml(fullName)} — চেক করে দেখলাম, ${escapeHtml(
             formatAddonsList(parsed.addons)
-          )}-এর সক্রিয় অ্যাক্সেস আছে, তাই এখানে নতুন করে কেনার কিছু নেই। প্রোফাইল দেখতে বা অন্য কোনো upgrade দেখতে চাইলে 📚 মেনু বাটনে ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team`,
+          )}-এ আপনার সক্রিয় অ্যাক্সেস ইতিমধ্যেই আছে, তাই এখানে নতুন করে কেনার দরকার নেই। প্রোফাইল দেখতে বা অন্য কোনো upgrade দেখতে চাইলে 📚 মেনু বাটনে ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team`,
           { parse_mode: "HTML" }
         );
         return;
@@ -388,9 +388,9 @@ export async function startOrderFromSitePayload(env, db, message, parsed) {
     await sendMessage(
       env,
       chatId,
-      `👋 হ্যালো ${escapeHtml(fullName)} — আপনার কাছে ইতিমধ্যেই <b>${escapeHtml(TIER_NAMES[currentBestTier])}</b> আছে, যেখানে <b>${escapeHtml(
+      `👋 হ্যালো ${escapeHtml(fullName)} — আপনি ইতিমধ্যেই <b>${escapeHtml(TIER_NAMES[currentBestTier])}</b>-এ আছেন, যেখানে <b>${escapeHtml(
         TIER_NAMES[parsed.packageKey]
-      )}</b>-এর সবকিছু আগে থেকেই অন্তর্ভুক্ত। প্রোফাইল দেখতে বা আরও upgrade দেখতে চাইলে 📚 মেনু বাটনে ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team`,
+      )}</b>-এর সবকিছু আগে থেকেই অন্তর্ভুক্ত। প্রোফাইল দেখতে বা আরও উঁচু কোনো tier-এ upgrade দেখতে চাইলে 📚 মেনু বাটনে ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team`,
       { parse_mode: "HTML" }
     );
     return;
@@ -506,10 +506,10 @@ export async function handleStartCommand(env, db, message) {
     [
       `👋 <b>স্বাগতম, ${escapeHtml(fullName)}!</b>`,
       "",
-      "আপনি এখন <b>NLT Exclusive Mentorship</b> বটে আছেন।",
+      "আপনি এখন <b>NLT Exclusive Mentorship</b>-এ আছেন — আমরা এখানে আছি আপনার পাশে।",
       `আপনার বর্তমান সাপোর্ট লেভেল: <b>${supportLabel}</b>`,
       "",
-      "💬 যেকোনো প্রশ্ন থাকলে সরাসরি এখানে টাইপ করুন — সেটি সরাসরি আমাদের টিমের কাছে যাবে।",
+      "💬 যেকোনো প্রশ্ন থাকলে সরাসরি এখানে টাইপ করুন — সরাসরি আমাদের কাছে চলে যাবে।",
       "📚 প্রোফাইল দেখতে, upgrade করতে বা কোনো add-on নবায়ন করতে নিচের মেনু বাটনে ট্যাপ করুন।",
       "",
       "— NLT Exclusive Mentorship Team"

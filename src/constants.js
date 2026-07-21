@@ -97,7 +97,7 @@ export const MAIN_REPLY_KEYBOARD = { keyboard: [[{ text: MENU_BUTTON_TEXT }]], r
 // ⚠️ Must match apps/web/src/data/pricing.js -> paymentMethods exactly. If
 // you change the numbers on the website, update them here too.
 export const PAYMENT_INSTRUCTIONS_TEXT =
-  "নিচের যেকোনো একটি মাধ্যমে সঠিক পরিমাণ টাকা পাঠিয়ে পেমেন্টের স্ক্রিনশট এখানেই আপলোড করুন:\n\n" +
+  "নিরাপদে ও নিশ্চিন্তে সম্পন্ন করুন — নিচের যেকোনো একটি মাধ্যমে সঠিক পরিমাণ টাকা পাঠিয়ে পেমেন্টের স্ক্রিনশট এখানেই আপলোড করুন:\n\n" +
   "• Binance UID (USDT): 767376321\n" +
   "  Binance Pay / internal transfer এর মাধ্যমে এই UID-তে পাঠান। শুধুমাত্র USDT।\n\n" +
   "• USDT Address (TRC20): TJaRxNsDw7qsdQuC6EvyrTo8t9r832oRM8\n" +
@@ -108,7 +108,7 @@ export const PAYMENT_INSTRUCTIONS_TEXT =
 // to the customer right after they submit payment proof so they know what
 // to expect instead of wondering if the bot actually received it.
 export const PAYMENT_REVIEW_ETA_HOURS = 24;
-export const PAYMENT_REVIEW_EXPECTATION_TEXT = `⏳ ধন্যবাদ! আমাদের টিম এখন এটি যাচাই করছে এবং ${PAYMENT_REVIEW_ETA_HOURS} ঘণ্টার মধ্যে এখানে নিশ্চিতকরণ পাঠাবে।\n\n— NLT Exclusive Mentorship Team`;
+export const PAYMENT_REVIEW_EXPECTATION_TEXT = `⏳ পেয়ে গেছি, ধন্যবাদ। এখন আমাদের টিম ব্যক্তিগতভাবে এটি যাচাই করছে — ${PAYMENT_REVIEW_ETA_HOURS} ঘণ্টার মধ্যেই এখানে আপনার কনফার্মেশন পেয়ে যাবেন।\n\n— NLT Exclusive Mentorship Team`;
 
 // ⚠️ Replace with your real website's checkout/pricing URL. Shown to
 // anyone who opens the bot directly (not via a site deep-link) and tries

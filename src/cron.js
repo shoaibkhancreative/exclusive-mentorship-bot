@@ -95,15 +95,19 @@ export async function checkSplitPaymentDeadlines(env, db) {
     }
 
     const sentDays = new Set((order.reminder_days_sent || "").split(",").filter(Boolean).map(Number));
+    const lastReminderDay = TIER2_SPLIT_REMINDER_DAYS[TIER2_SPLIT_REMINDER_DAYS.length - 1];
     for (const markDay of TIER2_SPLIT_REMINDER_DAYS) {
       if (daysElapsed >= markDay && !sentDays.has(markDay)) {
         sentDays.add(markDay);
-        await sendMessage(
-          env,
-          order.telegram_user_id,
-          `🔔 <b>রিমাইন্ডার:</b> আপনার পূর্ণ অ্যাক্সেস, Priority Support, Live Q&A এবং সব add-on মাত্র একধাপ দূরে। Order #${order.id}-এর বাকি Installment 2 (${formatAmount(TIER2_SPLIT.installment2)} USDT) <b>${formatDueDate(order.installment2_due_at)}</b> তারিখের মধ্যে পরিশোধ করুন। প্রস্তুত হলে এখনই এখানে পেমেন্ট প্রমাণ আপলোড করুন।\n\n— NLT Exclusive Mentorship Team`,
-          { parse_mode: "HTML" }
-        );
+        // Escalating urgency: the earliest reminders read as a routine
+        // nudge ("almost there"), the final reminder (closest to the
+        // 30-day deadline) makes the loss-aversion explicit — losing
+        // Phase 1 access is a real, near-term consequence at that point.
+        const body =
+          markDay === lastReminderDay
+            ? `⚠️ <b>শেষ রিমাইন্ডার:</b> Order #${order.id}-এর Installment 2 (${formatAmount(TIER2_SPLIT.installment2)} USDT) পরিশোধের সময়সীমা <b>${formatDueDate(order.installment2_due_at)}</b>-তে শেষ হচ্ছে। এর মধ্যে পরিশোধ না করলে Phase 1 অ্যাক্সেস সাময়িকভাবে বন্ধ হয়ে যাবে। প্রস্তুত হলে এখনই এখানে পেমেন্ট প্রমাণ আপলোড করুন।\n\n— NLT Exclusive Mentorship Team`
+            : `🔔 <b>রিমাইন্ডার:</b> আপনার পূর্ণ অ্যাক্সেস, Priority Support, Live Q&A এবং সব add-on মাত্র একধাপ দূরে। Order #${order.id}-এর বাকি Installment 2 (${formatAmount(TIER2_SPLIT.installment2)} USDT) <b>${formatDueDate(order.installment2_due_at)}</b> তারিখের মধ্যে পরিশোধ করুন। প্রস্তুত হলে এখনই এখানে পেমেন্ট প্রমাণ আপলোড করুন।\n\n— NLT Exclusive Mentorship Team`;
+        await sendMessage(env, order.telegram_user_id, body, { parse_mode: "HTML" });
       }
     }
     const updatedField = [...sentDays].sort((a, b) => a - b).join(",");
@@ -156,14 +160,14 @@ export async function checkStalledOrders(env, db) {
           await sendMessage(
             env,
             order.telegram_user_id,
-            `🔔 <b>রিমাইন্ডার:</b> আপনার <b>Order #${order.id}</b> (${planLabel}) এখনো শুরু হয়নি — আপনার সিট নিশ্চিত হওয়ার অপেক্ষায়। প্রস্তুত হলে নিচের বাটনে ট্যাপ করে পেমেন্ট ডিটেইলস দেখুন, কোনো প্রশ্ন থাকলে সাপোর্ট অপশনও ব্যবহার করতে পারেন। আমরা এখানেই আছি।\n\n— NLT Exclusive Mentorship Team`,
+            `🔔 <b>রিমাইন্ডার:</b> আপনার <b>Order #${order.id}</b> (${planLabel}) এখনো শুরু হয়নি — আপনার সিট এখনো অপেক্ষায় আছে। প্রস্তুত হলে নিচের বাটনে ট্যাপ করে পেমেন্ট ডিটেইলস দেখুন, কোনো প্রশ্ন থাকলে সাপোর্ট অপশনও ব্যবহার করতে পারেন। আমরা এখানেই আছি।\n\n— NLT Exclusive Mentorship Team`,
             { parse_mode: "HTML", reply_markup: { inline_keyboard: buildOrderChoiceKeyboard(order.id) } }
           );
         } else {
           await sendMessage(
             env,
             order.telegram_user_id,
-            `🔔 <b>রিমাইন্ডার:</b> আপনার <b>Order #${order.id}</b> (${planLabel}) প্রায় সম্পন্ন — শুধু পেমেন্ট স্ক্রিনশটটাই বাকি। এখানেই পাঠিয়ে দিন, আমরা অগ্রাধিকার ভিত্তিতে রিভিউ করে সঙ্গে সঙ্গে অ্যাক্সেস চালু করে দেব। কোনো সমস্যা হলে নির্দ্বিধায় জানান।\n\n— NLT Exclusive Mentorship Team`,
+            `🔔 <b>রিমাইন্ডার:</b> আপনার <b>Order #${order.id}</b> (${planLabel}) প্রায় সম্পন্ন — শুধু পেমেন্ট স্ক্রিনশটটাই বাকি। এখানেই পাঠিয়ে দিন, আমরা সঙ্গে সঙ্গে রিভিউ করে অ্যাক্সেস চালু করে দেব। কোনো সমস্যা হলে নির্দ্বিধায় জানান, আমরা সাহায্য করতে প্রস্তুত।\n\n— NLT Exclusive Mentorship Team`,
             { parse_mode: "HTML" }
           );
         }
