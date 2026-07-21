@@ -101,14 +101,44 @@ export function sleep(ms) {
 //  ERROR NOTIFICATION
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function notifyAdminError(env, error, context = "") {
+/** Notifies the admin of an error, always including the raw stack, but
+ *  ALSO pulling out the specific Telegram API failure reason when the
+ *  error came from callTelegramApi() (see src/telegram.js) — i.e. when
+ *  error.telegramResponse is present. That's the piece that actually
+ *  answers "why did this fail" (file too big, protect_content enabled on
+ *  the source chat, message to forward not found / already deleted, bot
+ *  lacking permission in the target chat, etc.) — without surfacing it,
+ *  the admin only ever sees a generic stack trace and has to guess.
+ *
+ *  `meta.mediaKind`, when passed, gets its own banner line so a failed
+ *  video/video_note forward is impossible to miss in the admin chat —
+ *  the exact Telegram reason is visible right there next time it
+ *  happens, instead of just another anonymous forward failure. */
+export async function notifyAdminError(env, error, context = "", meta = {}) {
   console.error(`[${context}]`, error);
   if (!env.ADMIN_CHAT_ID || !env.BOT_TOKEN) return;
   try {
+    const lines = [`🔥 <b>Bot Error</b>${context ? ` — ${escapeHtml(context)}` : ""}`];
+
+    const mediaKind = meta && meta.mediaKind;
+    if (mediaKind === "video" || mediaKind === "video_note") {
+      lines.push("", `🎥 <b>VIDEO FORWARD FAILED</b> (mediaKind: <code>${escapeHtml(mediaKind)}</code>)`);
+    } else if (mediaKind) {
+      lines.push("", `📎 Media kind: <code>${escapeHtml(mediaKind)}</code>`);
+    }
+
+    const tg = error && error.telegramResponse;
+    if (tg) {
+      lines.push("", `<b>Telegram says:</b> ${escapeHtml(tg.description || "Unknown error")} (error_code: <code>${escapeHtml(String(tg.error_code ?? "?"))}</code>)`);
+      if (tg.parameters && Object.keys(tg.parameters).length) {
+        lines.push(`Parameters: <code>${escapeHtml(JSON.stringify(tg.parameters))}</code>`);
+      }
+    }
+
     const rawDetails = error && error.stack ? error.stack : String(error);
-    const details = rawDetails.slice(0, 3500);
-    const text = `🔥 <b>Bot Error</b>${context ? ` — ${escapeHtml(context)}` : ""}\n\n<code>${escapeHtml(details)}</code>`;
-    await sendMessage(env, env.ADMIN_CHAT_ID, text, { parse_mode: "HTML" });
+    lines.push("", `<code>${escapeHtml(rawDetails.slice(0, 3000))}</code>`);
+
+    await sendMessage(env, env.ADMIN_CHAT_ID, lines.join("\n"), { parse_mode: "HTML" });
   } catch (notifyErr) {
     console.error("Failed to notify admin of the error above:", notifyErr);
   }

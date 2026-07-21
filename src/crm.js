@@ -4,7 +4,7 @@
 
 import { ADDON_NAMES, CHANNELS, SUPPORT_GROUPS, TIER_NAMES } from './constants.js';
 import { banChatMemberUntil, callTelegramApi, closeForumTopic, createForumTopic, deleteForumTopic, editMessageReplyMarkup, forwardMessage, safeAnswerCallbackQuery, sendMessage } from './telegram.js';
-import { escapeHtml, formatAmount, getForwardableMediaKind, stripSupergroupPrefix } from './utils.js';
+import { escapeHtml, formatAmount, getForwardableMediaKind, notifyAdminError, stripSupergroupPrefix } from './utils.js';
 import { getActiveSubscriptionDetails, getSupportGroupForUser } from './entitlements.js';
 import { clearAdminState, purgeUser, setAdminState } from './admin.js';
 
@@ -154,7 +154,7 @@ export async function buildAdminChatButton(env, db, fromUser) {
  *      message went to their normal support thread, or (on any failure
  *      above) they're told the team has been notified directly.
  */
-export async function routeMessageToSupportThread(env, db, fromUser, chatId, messageId) {
+export async function routeMessageToSupportThread(env, db, fromUser, chatId, messageId, mediaKind = null) {
   const groupId = await getSupportGroupForUser(db, String(fromUser.id));
   const ticket = await getOrCreateTicketThread(env, db, fromUser, groupId);
 
@@ -201,6 +201,7 @@ export async function routeMessageToSupportThread(env, db, fromUser, chatId, mes
     await forwardMessage(env, groupId, chatId, messageId, { message_thread_id: ticket.threadId });
   } catch (err) {
     console.error(`routeMessageToSupportThread: failed to deliver into ticket thread for user ${fromUser.id}:`, err);
+    await notifyAdminError(env, err, `routeMessageToSupportThread: forwardMessage into ticket thread failed for user ${fromUser.id}`, { mediaKind });
     const delivered = await fallbackToAdmin("delivery into the existing support thread failed");
     if (!delivered) {
       await sendMessage(env, chatId, "⚠️ আপনার মেসেজ পাঠাতে সাময়িক একটি সমস্যা হচ্ছে — একটু পর আবার চেষ্টা করুন, অথবা সরাসরি আমাদের সাথে যোগাযোগ করুন।\n\n— NLT Exclusive Mentorship Team");

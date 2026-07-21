@@ -4,7 +4,7 @@
 
 import { CHANNELS, PAYMENT_REVIEW_EXPECTATION_TEXT, SPLIT_INSTALLMENT2_STATUSES, SUPPORT_GROUPS, TIER2_SPLIT, TIER_NAMES } from './constants.js';
 import { editOrSendMessage, forwardMessage, kickChatMember, safeAnswerCallbackQuery, sendMessage } from './telegram.js';
-import { escapeHtml, formatAddonsList, formatAmount, formatDueDate, getForwardableMediaKind, isRateLimited } from './utils.js';
+import { escapeHtml, formatAddonsList, formatAmount, formatDueDate, getForwardableMediaKind, isRateLimited, notifyAdminError } from './utils.js';
 import { wipeUserData } from './db.js';
 import { getSupportGroupForUser, getUserBestTier, grantChannelInvite, grantEntitlementsForOrder, hasOpenPaymentOrder } from './entitlements.js';
 import { buildAdminChatButton, moveUserTicketToGroup, routeMessageToSupportThread } from './crm.js';
@@ -80,13 +80,14 @@ export async function handleIncomingMedia(env, db, message) {
     return;
   }
 
+  const kind = getForwardableMediaKind(message);
+
   const awaitingPayment = await hasOpenPaymentOrder(db, userId);
   if (!awaitingPayment) {
-    await routeMessageToSupportThread(env, db, message.from, chatId, message.message_id);
+    await routeMessageToSupportThread(env, db, message.from, chatId, message.message_id, kind);
     return;
   }
 
-  const kind = getForwardableMediaKind(message);
   if (!kind) return; // Unsupported media type — ignore.
 
   // photo is the one irregular case: Telegram sends an array of sizes, and
@@ -190,6 +191,7 @@ export async function processPaymentProof(env, db, fromUser, chatId, mediaKind, 
     adminNotified = true;
   } catch (err) {
     console.error(`processPaymentProof: failed to forward proof / notify admin for order #${order.id}:`, err);
+    await notifyAdminError(env, err, `processPaymentProof: forwardMessage failed for order #${order.id} (user ${userId})`, { mediaKind });
   }
 
   if (!adminNotified) {
@@ -544,7 +546,7 @@ export async function handleMediaClassificationCallback(env, db, callbackQuery) 
     await processPaymentProof(env, db, fromUser, chatId, pending.kind, pending.file_id, pending.message_id);
     await editOrSendMessage(env, chatId, promptMessageId, "🧾 বুঝেছি — এটিকে পেমেন্ট প্রমাণ হিসেবে গণ্য করা হচ্ছে।", { reply_markup: { inline_keyboard: [] } });
   } else {
-    await routeMessageToSupportThread(env, db, fromUser, chatId, pending.message_id);
+    await routeMessageToSupportThread(env, db, fromUser, chatId, pending.message_id, pending.kind);
     await editOrSendMessage(env, chatId, promptMessageId, "💬 বুঝেছি — এটি আমাদের সাপোর্ট টিমের কাছে পাঠানো হয়েছে।", { reply_markup: { inline_keyboard: [] } });
   }
 }
