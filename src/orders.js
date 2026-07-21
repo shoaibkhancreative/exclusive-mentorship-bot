@@ -42,9 +42,7 @@ export function buildOrderChoiceCard(order, fullName) {
     order.addons ? `✨ <b>এর সাথে আছে:</b> ${escapeHtml(formatAddonsList(order.addons))}` : "",
     `💵 <b>পরিশোধযোগ্য পরিমাণ:</b> ${formatAmount(getOrderDueAmount(order))} USDT`,
     "",
-    "আপনার অ্যাক্সেস মাত্র একধাপ দূরে — নিচের কোনটি এখন আপনার জন্য প্রযোজ্য?",
-    "",
-    "— NLT Exclusive Mentorship Team"
+    "আপনার অ্যাক্সেস মাত্র একধাপ দূরে — নিচের কোনটি এখন আপনার জন্য প্রযোজ্য?"
   ]
     .filter(Boolean)
     .join("\n");
@@ -76,7 +74,7 @@ export async function handleIncomingMedia(env, db, message) {
   const mediaRateLimitMs = isRateLimited(userId, "media");
   if (mediaRateLimitMs) {
     const waitSeconds = Math.max(1, Math.ceil(mediaRateLimitMs / 1000));
-    await sendMessage(env, chatId, `⚠️ অনুগ্রহ করে একটু ধীরে করুন। ${waitSeconds} সেকেন্ড পর আবার চেষ্টা করুন।\n\n— NLT Exclusive Mentorship Team`);
+    await sendMessage(env, chatId, `⚠️ অনুগ্রহ করে একটু ধীরে করুন। ${waitSeconds} সেকেন্ড পর আবার চেষ্টা করুন।`);
     return;
   }
 
@@ -135,7 +133,7 @@ export async function processPaymentProof(env, db, fromUser, chatId, mediaKind, 
     .first();
 
   if (!order) {
-    await sendMessage(env, chatId, "আপনার জন্য এই মুহূর্তে কোনো পেন্ডিং অর্ডার দেখা যাচ্ছে না। কেনাকাটা শুরু করতে 📚 মেনু বাটনে ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team");
+    await sendMessage(env, chatId, "আপনার জন্য এই মুহূর্তে কোনো পেন্ডিং অর্ডার দেখা যাচ্ছে না। কেনাকাটা শুরু করতে 📚 মেনু বাটনে ট্যাপ করুন।");
     return;
   }
 
@@ -156,7 +154,7 @@ export async function processPaymentProof(env, db, fromUser, chatId, mediaKind, 
     .run();
 
   if (!updateResult.meta.changes) {
-    await sendMessage(env, chatId, "✅ পেয়েছি — এই অর্ডারটি ইতিমধ্যেই রিভিউ করা হচ্ছে।\n\n— NLT Exclusive Mentorship Team");
+    await sendMessage(env, chatId, "✅ পেয়েছি — এই অর্ডারটি ইতিমধ্যেই রিভিউ করা হচ্ছে।");
     return;
   }
 
@@ -250,9 +248,7 @@ export async function handleOrderChoiceCallback(env, db, callbackQuery) {
       "",
       buildOrderSummary({ ...order, status: "awaiting_photo" }),
       "",
-      "📸 এখন আপনার পেমেন্ট স্ক্রিনশট/প্রমাণ এখানে পাঠান।",
-      "",
-      "— NLT Exclusive Mentorship Team"
+      "📸 এখন আপনার পেমেন্ট স্ক্রিনশট/প্রমাণ এখানে পাঠান।"
     ].join("\n");
     await editOrSendMessage(env, chatId, messageId, text, { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: [] } });
     await safeAnswerCallbackQuery(env, callbackQuery.id);
@@ -269,17 +265,15 @@ export async function handleOrderChoiceCallback(env, db, callbackQuery) {
     chatId,
     messageId,
     [
-      "💬 <b>কোনো সমস্যা নেই — আমরা এখানেই আছি।</b>",
+      "💬 <b>কোনো সমস্যা নেই।</b>",
       "",
-      "নিচে আপনার প্রশ্ন টাইপ করুন, সরাসরি আমাদের টিমের কাছে চলে যাবে।",
+      "নিচে আপনার প্রশ্ন লিখুন — আমাদের টিম সরাসরি উত্তর দেবে।",
       "",
-      "প্রস্তুত হলে পরিবর্তে পেমেন্ট প্রমাণ জমা দিতে নিচে ট্যাপ করুন।",
-      "",
-      "— NLT Exclusive Mentorship Team"
+      "ইতিমধ্যে পেমেন্ট করে থাকলে, নিচের বাটনে ট্যাপ করুন।"
     ].join("\n"),
     {
       parse_mode: "HTML",
-      reply_markup: { inline_keyboard: [[{ text: "✅ আসলে, পেমেন্ট করেছি", callback_data: `orderchoice:paid:${orderId}` }]] }
+      reply_markup: { inline_keyboard: [[{ text: "✅ পেমেন্ট করেছি", callback_data: `orderchoice:paid:${orderId}` }]] }
     }
   );
   await safeAnswerCallbackQuery(env, callbackQuery.id);
@@ -390,7 +384,7 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
     await sendMessage(
       env,
       order.telegram_user_id,
-      `আপনার Order #${order.id}-এর স্ক্রিনশটে লেনদেনের পুরো বিস্তারিত স্পষ্টভাবে দেখা যায়নি, তাই এখনো নিশ্চিত করতে পারিনি। কোনো সমস্যা নেই — সম্পূর্ণ লেনদেন স্পষ্টভাবে দেখা যায় এমন একটি স্ক্রিনশট/ডকুমেন্ট আবার পাঠান, আমরা সঙ্গে সঙ্গে রিভিউ করব।\n\n— NLT Exclusive Mentorship Team`
+      `আপনার Order #${order.id}-এর স্ক্রিনশটে লেনদেনের পুরো বিস্তারিত স্পষ্টভাবে দেখা যায়নি, তাই এখনো নিশ্চিত করতে পারিনি। কোনো সমস্যা নেই — সম্পূর্ণ লেনদেন স্পষ্টভাবে দেখা যায় এমন একটি স্ক্রিনশট/ডকুমেন্ট আবার পাঠান, আমরা সঙ্গে সঙ্গে রিভিউ করব।`
     );
 
     await sendMessage(env, env.ADMIN_CHAT_ID, `${buildOrderSummary(order)}\n\n❌ <b>Rejected</b> by admin.`, {
@@ -415,7 +409,7 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
       await sendMessage(
         env,
         order.telegram_user_id,
-        `✅ <b>Installment 1 নিশ্চিত হয়েছে — স্বাগতম!</b>\n\nএই যে আপনার Phase 1 অ্যাক্সেস লিঙ্ক (Part 1 ভিডিও):\n🔗 ${link}\n\nপূর্ণ অ্যাক্সেস, Priority Support, Live Q&A এবং সব add-on এখনো বাকি — বাকি ${formatAmount(TIER2_SPLIT.installment2)} USDT <b>${formatDueDate(installment2DueAt)}</b> তারিখের মধ্যে পরিশোধ করলে সবকিছু আনলক হয়ে যাবে। এই সময়ের মধ্যে পরিশোধ না হলে Phase 1 অ্যাক্সেসও সাময়িকভাবে বন্ধ হয়ে যাবে, তাই সময়মতো সেরে ফেলাই ভালো।\n\n— NLT Exclusive Mentorship Team`,
+        `✅ <b>Installment 1 নিশ্চিত হয়েছে — স্বাগতম!</b>\n\nএই যে আপনার Phase 1 অ্যাক্সেস লিঙ্ক (Part 1 ভিডিও):\n🔗 ${link}\n\nপূর্ণ অ্যাক্সেস, Priority Support, Live Q&A এবং সব add-on এখনো বাকি — বাকি ${formatAmount(TIER2_SPLIT.installment2)} USDT <b>${formatDueDate(installment2DueAt)}</b> তারিখের মধ্যে পরিশোধ করলে সবকিছু আনলক হয়ে যাবে। এই সময়ের মধ্যে পরিশোধ না হলে Phase 1 অ্যাক্সেসও সাময়িকভাবে বন্ধ হয়ে যাবে, তাই সময়মতো সেরে ফেলাই ভালো।`,
         { parse_mode: "HTML", link_preview_options: { is_disabled: true } }
       );
     } else {
@@ -461,7 +455,7 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
 
   if (links.length > 0) {
     const linkList = links.map(([label, url]) => `🔗 ${label}: ${url}`).join("\n");
-    await sendMessage(env, order.telegram_user_id, `🎉 <b>পেমেন্ট নিশ্চিত হয়েছে — আনুষ্ঠানিকভাবে আপনি এখন NLT Exclusive Mentorship-এর অংশ!</b>\n\nএই যে আপনার এক্সক্লুসিভ অ্যাক্সেস (single-use লিঙ্ক — শেয়ার করবেন না):\n\n${linkList}\n\nআমাদের টিম আপনার যাত্রায় সঙ্গে আছে — কোনো প্রশ্ন থাকলে যেকোনো সময় জানান।\n\n— NLT Exclusive Mentorship Team`, {
+    await sendMessage(env, order.telegram_user_id, `🎉 <b>পেমেন্ট নিশ্চিত হয়েছে — আনুষ্ঠানিকভাবে আপনি এখন NLT Exclusive Mentorship-এর অংশ!</b>\n\nএই যে আপনার এক্সক্লুসিভ অ্যাক্সেস (single-use লিঙ্ক — শেয়ার করবেন না):\n\n${linkList}\n\nআমাদের টিম আপনার যাত্রায় সঙ্গে আছে — কোনো প্রশ্ন থাকলে যেকোনো সময় জানান।`, {
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true }
     });
@@ -477,7 +471,7 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
 
   if (newSupportGroup !== oldSupportGroup) {
     const label = { [SUPPORT_GROUPS.consultation]: "VIP Consultation", [SUPPORT_GROUPS.priority]: "Priority", [SUPPORT_GROUPS.basic]: "Basic" }[newSupportGroup] || "General";
-    await sendMessage(env, order.telegram_user_id, `🎉 অভিনন্দন! আপনার সাপোর্ট লেভেল এখন upgrade হয়ে গেছে: <b>${label}</b> — এখন থেকে অগ্রাধিকারভিত্তিক ও দ্রুততর সহায়তা পাবেন, ঠিক যেমনটা এই লেভেলের সদস্যরা পান।\n\n— NLT Exclusive Mentorship Team`, { parse_mode: "HTML" });
+    await sendMessage(env, order.telegram_user_id, `🎉 অভিনন্দন! আপনার সাপোর্ট লেভেল এখন upgrade হয়ে গেছে: <b>${label}</b> — এখন থেকে অগ্রাধিকারভিত্তিক ও দ্রুততর সহায়তা পাবেন, ঠিক যেমনটা এই লেভেলের সদস্যরা পান।`, { parse_mode: "HTML" });
     await moveUserTicketToGroup(env, db, order.telegram_user_id, newSupportGroup);
   }
 
@@ -498,7 +492,7 @@ export async function handleDeleteUserCallback(env, db, callbackQuery) {
   }
   const userId = (callbackQuery.data || "").split(":")[1];
   await wipeUserData(db, userId);
-  await sendMessage(env, userId, "আপনার আগের অর্ডার ডেটা মুছে ফেলা হয়েছে। নতুন করে শুরু করতে প্রস্তুত হলে 📚 মেনু বাটনে ট্যাপ করুন — আমরা এখানেই আছি।\n\n— NLT Exclusive Mentorship Team").catch(() => {});
+  await sendMessage(env, userId, "আপনার আগের অর্ডার ডেটা মুছে ফেলা হয়েছে। নতুন করে শুরু করতে প্রস্তুত হলে 📚 মেনু বাটনে ট্যাপ করুন।").catch(() => {});
   await editOrSendMessage(env, env.ADMIN_CHAT_ID, callbackQuery.message.message_id, `${callbackQuery.message.text || ""}\n\n🗑 <b>User data deleted</b> — they can order again from scratch.`, {
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: [] }

@@ -185,7 +185,7 @@ export async function routeMessageToSupportThread(env, db, fromUser, chatId, mes
     // ID) about the forum-topic-creation failure — but the message itself
     // must not vanish, so forward it directly too.
     await fallbackToAdmin("could not open a support thread");
-    await sendMessage(env, chatId, "⚠️ আপনার মেসেজ পাঠাতে সাময়িক একটি সমস্যা হচ্ছে, তবে আমাদের টিমকে সরাসরি জানানো হয়েছে এবং শীঘ্রই আপনার সাথে যোগাযোগ করবে।\n\n— NLT Exclusive Mentorship Team");
+    await sendMessage(env, chatId, "⚠️ এই মুহূর্তে আপনার মেসেজ পাঠাতে একটু সমস্যা হচ্ছে। চিন্তা করবেন না, আমাদের টিম এটা দেখেছে এবং শীঘ্রই আপনার সাথে যোগাযোগ করবে।");
     return;
   }
 
@@ -204,10 +204,10 @@ export async function routeMessageToSupportThread(env, db, fromUser, chatId, mes
     await notifyAdminError(env, err, `routeMessageToSupportThread: forwardMessage into ticket thread failed for user ${fromUser.id}`, { mediaKind });
     const delivered = await fallbackToAdmin("delivery into the existing support thread failed");
     if (!delivered) {
-      await sendMessage(env, chatId, "⚠️ আপনার মেসেজ পাঠাতে সাময়িক একটি সমস্যা হচ্ছে — একটু পর আবার চেষ্টা করুন, অথবা সরাসরি আমাদের সাথে যোগাযোগ করুন।\n\n— NLT Exclusive Mentorship Team");
+      await sendMessage(env, chatId, "⚠️ এই মুহূর্তে আপনার মেসেজ পাঠানো যাচ্ছে না। একটু পর আবার চেষ্টা করুন, অথবা সরাসরি আমাদের সাথে যোগাযোগ করুন।");
       return;
     }
-    await sendMessage(env, chatId, "⚠️ আপনার সাপোর্ট থ্রেডে সাময়িক একটি সমস্যা হয়েছিল, তবে আমাদের টিমকে সরাসরি জানানো হয়েছে এবং শীঘ্রই আপনার সাথে যোগাযোগ করবে।\n\n— NLT Exclusive Mentorship Team");
+    await sendMessage(env, chatId, "⚠️ আপনার সাপোর্ট থ্রেডে সাময়িক একটা সমস্যা হয়েছিল, তবে আপনার মেসেজ আমাদের টিম পেয়ে গেছে — শীঘ্রই যোগাযোগ করবে।");
   }
 }
 
@@ -355,7 +355,7 @@ export async function handleUserMgmtBanConfirm(env, db, callbackQuery, userId, d
     parse_mode: "HTML",
     message_thread_id: callbackQuery.message.message_thread_id
   });
-  await sendMessage(env, userId, `⛔ মেন্টরশিপ টিম আপনার অ্যাক্সেস${days > 0 ? ` ${days} দিনের জন্য` : ""} স্থগিত করেছে।\n\n— NLT Exclusive Mentorship Team`).catch(() => {});
+  await sendMessage(env, userId, `⛔ মেন্টরশিপ টিম আপনার অ্যাক্সেস${days > 0 ? ` ${days} দিনের জন্য` : ""} স্থগিত করেছে।`).catch(() => {});
   await safeAnswerCallbackQuery(env, callbackQuery.id, "Banned.");
 }
 
@@ -489,7 +489,7 @@ export async function handleUserMgmtSetLevel(env, db, callbackQuery, userId, lev
     parse_mode: "HTML",
     message_thread_id: callbackQuery.message.message_thread_id
   });
-  await sendMessage(env, userId, `🔔 আপনার সাপোর্ট লেভেল আপডেট করা হয়েছে: <b>${target.label}</b>।\n\n— NLT Exclusive Mentorship Team`, { parse_mode: "HTML" }).catch(() => {});
+  await sendMessage(env, userId, `🔔 আপনার সাপোর্ট লেভেল আপডেট করা হয়েছে: <b>${target.label}</b>।`, { parse_mode: "HTML" }).catch(() => {});
   await safeAnswerCallbackQuery(env, callbackQuery.id, "Moved.");
 }
 

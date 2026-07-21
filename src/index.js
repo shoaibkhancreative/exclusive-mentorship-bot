@@ -267,7 +267,7 @@ export async function routeUpdate(env, db, update, ctx) {
     await handleMenuCommand(env, db, message);
   } else if (isPrivateChat && message.text && !message.text.startsWith("/")) {
     if (await isBanned(db, String(message.from.id))) {
-      await sendMessage(env, message.chat.id, "মেন্টরশিপ টিম আপনার অ্যাক্সেস বাতিল করেছে। এটি ভুল হয়েছে মনে করলে অনুগ্রহ করে সরাসরি সাপোর্টে যোগাযোগ করুন।\n\n— NLT Exclusive Mentorship Team");
+      await sendMessage(env, message.chat.id, "মেন্টরশিপ টিম আপনার অ্যাক্সেস বাতিল করেছে। এটি ভুল হয়েছে মনে করলে অনুগ্রহ করে সরাসরি সাপোর্টে যোগাযোগ করুন।");
       return;
     }
     await handleUserTextMessage(env, db, message);

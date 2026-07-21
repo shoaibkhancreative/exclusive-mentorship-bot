@@ -378,7 +378,7 @@ export async function startOrderFromSitePayload(env, db, message, parsed) {
           chatId,
           `👋 হ্যালো ${escapeHtml(fullName)} — চেক করে দেখলাম, ${escapeHtml(
             formatAddonsList(parsed.addons)
-          )}-এ আপনার সক্রিয় অ্যাক্সেস ইতিমধ্যেই আছে, তাই এখানে নতুন করে কেনার দরকার নেই। প্রোফাইল দেখতে বা অন্য কোনো upgrade দেখতে চাইলে 📚 মেনু বাটনে ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team`,
+          )}-এ আপনার সক্রিয় অ্যাক্সেস ইতিমধ্যেই আছে, তাই এখানে নতুন করে কেনার দরকার নেই। প্রোফাইল দেখতে বা অন্য কোনো upgrade দেখতে চাইলে 📚 মেনু বাটনে ট্যাপ করুন।`,
           { parse_mode: "HTML" }
         );
         return;
@@ -390,7 +390,7 @@ export async function startOrderFromSitePayload(env, db, message, parsed) {
       chatId,
       `👋 হ্যালো ${escapeHtml(fullName)} — আপনি ইতিমধ্যেই <b>${escapeHtml(TIER_NAMES[currentBestTier])}</b>-এ আছেন, যেখানে <b>${escapeHtml(
         TIER_NAMES[parsed.packageKey]
-      )}</b>-এর সবকিছু আগে থেকেই অন্তর্ভুক্ত। প্রোফাইল দেখতে বা আরও উঁচু কোনো tier-এ upgrade দেখতে চাইলে 📚 মেনু বাটনে ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team`,
+      )}</b>-এর সবকিছু আগে থেকেই অন্তর্ভুক্ত। প্রোফাইল দেখতে বা আরও উঁচু কোনো tier-এ upgrade দেখতে চাইলে 📚 মেনু বাটনে ট্যাপ করুন।`,
       { parse_mode: "HTML" }
     );
     return;
@@ -432,14 +432,14 @@ export async function startOrderFromSitePayload(env, db, message, parsed) {
       await sendMessage(
         env,
         chatId,
-        `⏳ আপনার একটি অর্ডার ইতিমধ্যে চলমান আছে: <b>Order #${existingOpen.id}</b> (${escapeHtml(TIER_NAMES[existingOpen.plan] || existingOpen.plan)})।\n\nএখন পরিশোধযোগ্য পরিমাণ: <b>${formatAmount(getOrderDueAmount(existingOpen))} USDT${dueSuffix}</b>।\n\nঅনুগ্রহ করে এখানে সেই পেমেন্টের স্ক্রিনশট পাঠান, অথবা সাহায্য প্রয়োজন হলে আমাদের মেসেজ করুন।\n\n— NLT Exclusive Mentorship Team`,
+        `⏳ আপনার একটি অর্ডার ইতিমধ্যে চলমান আছে: <b>Order #${existingOpen.id}</b> (${escapeHtml(TIER_NAMES[existingOpen.plan] || existingOpen.plan)})।\n\nএখন পরিশোধযোগ্য পরিমাণ: <b>${formatAmount(getOrderDueAmount(existingOpen))} USDT${dueSuffix}</b>।\n\nঅনুগ্রহ করে এখানে সেই পেমেন্টের স্ক্রিনশট পাঠান, অথবা সাহায্য প্রয়োজন হলে আমাদের মেসেজ করুন।`,
         { parse_mode: "HTML" }
       );
       return;
     }
     // Extremely unlikely fallback (the conflicting order was there a
     // moment ago but is gone by the time we re-checked) — let them retry.
-    await sendMessage(env, chatId, "⚠️ আপনার অর্ডার ওপেন করতে গিয়ে একটি সমস্যা হয়েছে। অনুগ্রহ করে ওয়েবসাইটে ফিরে গিয়ে আবার Telegram বাটনে ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team");
+    await sendMessage(env, chatId, "⚠️ আপনার অর্ডার ওপেন করতে গিয়ে একটি সমস্যা হয়েছে। অনুগ্রহ করে ওয়েবসাইটে ফিরে গিয়ে আবার Telegram বাটনে ট্যাপ করুন।");
     return;
   }
 
@@ -466,7 +466,7 @@ export async function handleStartCommand(env, db, message) {
   const fullName = [message.from.first_name, message.from.last_name].filter(Boolean).join(" ") || "there";
 
   if (await isBanned(db, userId)) {
-    await sendMessage(env, chatId, "মেন্টরশিপ টিম আপনার অ্যাক্সেস বাতিল করেছে। এটি ভুল হয়েছে মনে করলে অনুগ্রহ করে সরাসরি সাপোর্টে যোগাযোগ করুন।\n\n— NLT Exclusive Mentorship Team");
+    await sendMessage(env, chatId, "মেন্টরশিপ টিম আপনার অ্যাক্সেস বাতিল করেছে। এটি ভুল হয়েছে মনে করলে অনুগ্রহ করে সরাসরি সাপোর্টে যোগাযোগ করুন।");
     return;
   }
 
@@ -484,7 +484,7 @@ export async function handleStartCommand(env, db, message) {
       await sendMessage(
         env,
         chatId,
-        "⚠️ এই অর্ডার লিঙ্কটি সঠিক নয় বা মেয়াদোত্তীর্ণ মনে হচ্ছে। অনুগ্রহ করে ওয়েবসাইটে ফিরে গিয়ে চেকআউট আবার শুরু করুন এবং Telegram বাটনে আবার ট্যাপ করুন।\n\n— NLT Exclusive Mentorship Team"
+        "⚠️ এই অর্ডার লিঙ্কটি সঠিক নয় বা মেয়াদোত্তীর্ণ মনে হচ্ছে। অনুগ্রহ করে ওয়েবসাইটে ফিরে গিয়ে চেকআউট আবার শুরু করুন এবং Telegram বাটনে আবার ট্যাপ করুন।"
       );
       return;
     }
@@ -506,13 +506,11 @@ export async function handleStartCommand(env, db, message) {
     [
       `👋 <b>স্বাগতম, ${escapeHtml(fullName)}!</b>`,
       "",
-      "আপনি এখন <b>NLT Exclusive Mentorship</b>-এ আছেন — আমরা এখানে আছি আপনার পাশে।",
+      "আপনি এখন <b>NLT Exclusive Mentorship</b>-এ আছেন।",
       `আপনার বর্তমান সাপোর্ট লেভেল: <b>${supportLabel}</b>`,
       "",
       "💬 যেকোনো প্রশ্ন থাকলে সরাসরি এখানে টাইপ করুন — সরাসরি আমাদের কাছে চলে যাবে।",
-      "📚 প্রোফাইল দেখতে, upgrade করতে বা কোনো add-on নবায়ন করতে নিচের মেনু বাটনে ট্যাপ করুন।",
-      "",
-      "— NLT Exclusive Mentorship Team"
+      "📚 প্রোফাইল দেখতে, upgrade করতে বা কোনো add-on নবায়ন করতে নিচের মেনু বাটনে ট্যাপ করুন।"
     ].join("\n"),
     { parse_mode: "HTML", reply_markup: MAIN_REPLY_KEYBOARD }
   );

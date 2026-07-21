@@ -101,14 +101,13 @@ export const PAYMENT_INSTRUCTIONS_TEXT =
   "• Binance UID (USDT): 767376321\n" +
   "  Binance Pay / internal transfer এর মাধ্যমে এই UID-তে পাঠান। শুধুমাত্র USDT।\n\n" +
   "• USDT Address (TRC20): TJaRxNsDw7qsdQuC6EvyrTo8t9r832oRM8\n" +
-  "  শুধুমাত্র TRC20 নেটওয়ার্কে এই ঠিকানায় USDT পাঠান।\n\n" +
-  "— NLT Exclusive Mentorship Team";
+  "  শুধুমাত্র TRC20 নেটওয়ার্কে এই ঠিকানায় USDT পাঠান।";
 
 // ⚠️ Tune this to your team's real payment-review turnaround time — shown
 // to the customer right after they submit payment proof so they know what
 // to expect instead of wondering if the bot actually received it.
 export const PAYMENT_REVIEW_ETA_HOURS = 24;
-export const PAYMENT_REVIEW_EXPECTATION_TEXT = `⏳ পেয়ে গেছি, ধন্যবাদ। এখন আমাদের টিম ব্যক্তিগতভাবে এটি যাচাই করছে — ${PAYMENT_REVIEW_ETA_HOURS} ঘণ্টার মধ্যেই এখানে আপনার কনফার্মেশন পেয়ে যাবেন।\n\n— NLT Exclusive Mentorship Team`;
+export const PAYMENT_REVIEW_EXPECTATION_TEXT = `⏳ পেয়ে গেছি, ধন্যবাদ। আমাদের টিম এখন এটি ব্যক্তিগতভাবে যাচাই করছে — ${PAYMENT_REVIEW_ETA_HOURS} ঘণ্টার মধ্যেই এখানে আপনার কনফার্মেশন পেয়ে যাবেন।`;
 
 // ⚠️ Replace with your real website's checkout/pricing URL. Shown to
 // anyone who opens the bot directly (not via a site deep-link) and tries
@@ -129,8 +128,7 @@ export const ACCOUNTABILITY_PROTOCOL_TEXT =
   "2️⃣ নিয়মিতভাবে Notion trading journal মেইনটেইন করেন\n" +
   "3️⃣ ডেমো অ্যাকাউন্টে ৩০টি লগ করা ট্রেড সম্পন্ন করেন\n\n" +
   "...এবং তারপরও কাঙ্ক্ষিত ফলাফল না পান, তাহলে আমাদের মেন্টরশিপ টিম সরাসরি এক সপ্তাহ ধরে আপনার লাইভ ট্রেডিং পর্যবেক্ষণ করবে এবং সমস্যাটা ঠিক কোথায়, তা বের করতে একটি ফ্রি 1-on-1 Live Breakdown Session করবে।\n\n" +
-  "আপনার পরিস্থিতি জানাতে যেকোনো সময় এখানে মেসেজ করুন — আমাদের টিম ব্যক্তিগতভাবে রিভিউ করবে।\n\n" +
-  "— NLT Exclusive Mentorship Team";
+  "আপনার পরিস্থিতি জানাতে যেকোনো সময় এখানে মেসেজ করুন — আমাদের টিম ব্যক্তিগতভাবে রিভিউ করবে।";
 
 /** Statuses under which a split T2 order is in its "Installment 2" stage
  *  — i.e. Installment 1 has already been confirmed. Centralized here so
