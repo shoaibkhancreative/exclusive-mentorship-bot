@@ -4,7 +4,7 @@
 
 import { CHANNELS, PAYMENT_REVIEW_EXPECTATION_TEXT, SPLIT_INSTALLMENT2_STATUSES, SUPPORT_GROUPS, TIER2_SPLIT, TIER_NAMES } from './constants.js';
 import { editOrSendMessage, forwardMessage, kickChatMember, safeAnswerCallbackQuery, sendMessage } from './telegram.js';
-import { escapeHtml, formatAddonsList, formatAmount, formatDueDate, isRateLimited } from './utils.js';
+import { escapeHtml, formatAddonsList, formatAmount, formatDueDate, getForwardableMediaKind, isRateLimited } from './utils.js';
 import { wipeUserData } from './db.js';
 import { getSupportGroupForUser, getUserBestTier, grantChannelInvite, grantEntitlementsForOrder, hasOpenPaymentOrder } from './entitlements.js';
 import { buildAdminChatButton, moveUserTicketToGroup, routeMessageToSupportThread } from './crm.js';
@@ -57,15 +57,16 @@ export function buildOrderChoiceKeyboard(orderId) {
   ];
 }
 
-/** Any incoming photo/document/video/video_note/animation is routed based
+/** Any incoming forwardable media (photo/document/video/video_note/
+ *  animation/voice/sticker — see getForwardableMediaKind) is routed based
  *  on whether the user CURRENTLY has an order actually awaiting payment
  *  proof — checked directly against the orders table each time
  *  (hasOpenPaymentOrder), not a separate mutable "mode" flag that could
  *  drift out of sync with the order's real status:
  *   - Order in 'awaiting_photo', 'phase1_active', or 'phase1_expired' →
  *     ask "what is this for?" (Payment Proof vs Support). Applies
- *     uniformly to every media kind — photos and documents alike, and to
- *     both on-time and late Installment-2 submissions.
+ *     uniformly to every media kind — photos, voice notes, and stickers
+ *     alike, and to both on-time and late Installment-2 submissions.
  *   - No such order → skip the question entirely and forward it straight
  *     into their support thread, same as a text message would be. */
 export async function handleIncomingMedia(env, db, message) {
@@ -85,25 +86,15 @@ export async function handleIncomingMedia(env, db, message) {
     return;
   }
 
-  let fileId, kind;
-  if (Array.isArray(message.photo) && message.photo.length > 0) {
-    fileId = message.photo[message.photo.length - 1].file_id;
-    kind = "photo";
-  } else if (message.document) {
-    fileId = message.document.file_id;
-    kind = "document";
-  } else if (message.video) {
-    fileId = message.video.file_id;
-    kind = "video";
-  } else if (message.video_note) {
-    fileId = message.video_note.file_id;
-    kind = "video_note";
-  } else if (message.animation) {
-    fileId = message.animation.file_id;
-    kind = "animation";
-  } else {
-    return; // Unsupported media type — ignore.
-  }
+  const kind = getForwardableMediaKind(message);
+  if (!kind) return; // Unsupported media type — ignore.
+
+  // photo is the one irregular case: Telegram sends an array of sizes, and
+  // we want the largest/last one. Every other kind's file_id sits directly
+  // on message[kind] — the exact same field getForwardableMediaKind() just
+  // checked (message.voice, message.sticker, message.document, ...) — so a
+  // single lookup covers document/video/video_note/animation/voice/sticker.
+  const fileId = kind === "photo" ? message.photo[message.photo.length - 1].file_id : message[kind].file_id;
 
   await db
     .prepare(

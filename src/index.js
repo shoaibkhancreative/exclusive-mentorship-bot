@@ -246,7 +246,7 @@ export async function routeUpdate(env, db, update, ctx) {
     return;
   }
 
-  const hasMedia = Array.isArray(message.photo) && message.photo.length > 0 || message.document || message.video || message.video_note || message.animation;
+  const hasMedia = Boolean(getForwardableMediaKind(message));
 
   if (isAdminChat && message.text && message.text.startsWith("/stats")) {
     await handleStatsCommand(env, db, message);

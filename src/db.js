@@ -120,7 +120,7 @@ export async function ensureSchema(db) {
                                       -- pending_review_2, except on confirm the bot does NOT
                                       -- attempt to kick them from the temporary Phase 1 channel
                                       -- again, since the daily cron already removed them.)
-        media_kind           TEXT,   -- photo | document | video | video_note | animation
+        media_kind           TEXT,   -- photo | document | video | video_note | animation | voice | sticker
         media_file_id        TEXT,
         media_message_id     INTEGER,
         admin_chat_id        TEXT,
