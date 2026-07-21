@@ -130,6 +130,12 @@ export async function purgeUser(env, db, userId) {
     } catch (err) {
       failed.push(chatId);
     }
+    // Small pacing delay so a single user's removals across many chats
+    // don't queue up back-to-back and trip Telegram's per-chat rate
+    // limit (~20 actions/min/chat). kickChatMember/deleteForumTopic
+    // already retry once on a 429 via callTelegramApiWithRetry — this
+    // delay just makes hitting that limit less likely in the first place.
+    await sleep(75);
   }
 
   const ticket = await db.prepare(`SELECT * FROM tickets WHERE telegram_user_id = ?`).bind(userId).first();
@@ -375,23 +381,34 @@ export async function performFullWipe(env, db, adminChatId) {
 
     const allChats = [...Object.values(CHANNELS), ...Object.values(SUPPORT_GROUPS)];
     let kickFailures = 0;
+    const failedKicks = []; // e.g. "user 123 in chat -100456"
     for (const userId of allUserIds) {
       for (const chatId of allChats) {
         try {
           await kickChatMember(env, chatId, Number(userId));
         } catch (err) {
           kickFailures++;
+          failedKicks.push(`user ${userId} in ${chatId}`);
         }
+        // Pacing delay between calls — kickChatMember already retries once
+        // on 429 (via callTelegramApiWithRetry in telegram.js), but with
+        // many users × many chats fired back-to-back we can still queue up
+        // past Telegram's ~20 actions/min/chat limit faster than a single
+        // retry can absorb. This spreads the calls out to begin with.
+        await sleep(75);
       }
     }
 
     let topicFailures = 0;
+    const failedTopics = []; // e.g. "group -100456 / thread 42"
     for (const ticket of ticketRows || []) {
       try {
         await deleteForumTopic(env, ticket.group_id, ticket.thread_id);
       } catch (err) {
         topicFailures++;
+        failedTopics.push(`${ticket.group_id} / thread ${ticket.thread_id}`);
       }
+      await sleep(75);
     }
 
     // Every table this bot creates must be dropped here — including
@@ -430,20 +447,35 @@ export async function performFullWipe(env, db, adminChatId) {
     resetSchemaCache();
     await ensureSchema(db);
 
-    await sendMessage(
-      env,
-      adminChatId,
-      [
-        "🧹 <b>Database Wipe Complete</b>",
-        "",
-        `👥 Users processed: <b>${allUserIds.size}</b>`,
-        `🚪 Membership removals with failures: <b>${kickFailures}</b>`,
-        `🗑 Support topics deleted: <b>${(ticketRows || []).length - topicFailures}</b> / ${(ticketRows || []).length} (${topicFailures} failed)`,
-        "",
-        "Every table was dropped and rebuilt empty. Every user starts completely fresh."
-      ].join("\n"),
-      { parse_mode: "HTML" }
-    );
+    // Cap the itemized failure list at 15 lines per section so the report
+    // stays readable (and under Telegram's message length limits) even for
+    // large communities — the rest are summarized as "...and N more".
+    const FAILURE_LIST_CAP = 15;
+    const formatFailureList = (items) => {
+      if (items.length === 0) return "";
+      const shown = items.slice(0, FAILURE_LIST_CAP).map((item) => `  • ${escapeHtml(item)}`);
+      if (items.length > FAILURE_LIST_CAP) shown.push(`  …and ${items.length - FAILURE_LIST_CAP} more`);
+      return shown.join("\n");
+    };
+
+    const reportLines = [
+      "🧹 <b>Database Wipe Complete</b>",
+      "",
+      `👥 Users processed: <b>${allUserIds.size}</b>`,
+      `🚪 Membership removals with failures: <b>${kickFailures}</b>`,
+      `🗑 Support topics deleted: <b>${(ticketRows || []).length - topicFailures}</b> / ${(ticketRows || []).length} (${topicFailures} failed)`
+    ];
+
+    if (failedKicks.length > 0) {
+      reportLines.push("", "⚠️ Membership removals that failed (manual cleanup may be needed):", formatFailureList(failedKicks));
+    }
+    if (failedTopics.length > 0) {
+      reportLines.push("", "⚠️ Support topics that failed to delete (group_id / thread_id):", formatFailureList(failedTopics));
+    }
+
+    reportLines.push("", "Every table was dropped and rebuilt empty. Every user starts completely fresh.");
+
+    await sendMessage(env, adminChatId, reportLines.join("\n"), { parse_mode: "HTML" });
   } catch (err) {
     await notifyAdminError(env, err, "Full database wipe");
   }

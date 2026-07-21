@@ -2,6 +2,8 @@
 //  Telegram Bot API wrapper helpers
 // ───────────────────────────────────────────────────────────────────────────
 
+import { sleep } from './utils.js';
+
 export const TELEGRAM_API_ROOT = "https://api.telegram.org/bot";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -74,6 +76,27 @@ export async function editOrSendMessage(env, chatId, messageId, text, extra = {}
   }
 }
 
+/** Generic version of the retry-once-on-429 pattern that
+ *  sendBroadcastMessageWithRetry (src/admin.js) originally implemented
+ *  only for sendMessage. Calls `method` with `payload`; if Telegram
+ *  answers with 429 Too Many Requests and gives us a retry_after, waits
+ *  that many seconds and retries exactly once. Any other error, or a
+ *  failure on the retry itself, propagates to the caller as before —
+ *  callers that already wrap these calls in try/catch (purgeUser,
+ *  performFullWipe) don't need to change how they handle failures. */
+export async function callTelegramApiWithRetry(env, method, payload) {
+  try {
+    return await callTelegramApi(env, method, payload);
+  } catch (err) {
+    const retryAfter = err?.telegramResponse?.parameters?.retry_after;
+    if (err?.telegramResponse?.error_code === 429 && retryAfter) {
+      await sleep((Number(retryAfter) || 1) * 1000);
+      return await callTelegramApi(env, method, payload);
+    }
+    throw err;
+  }
+}
+
 export async function createChatInviteLink(env, chatId, opts = {}) {
   return callTelegramApi(env, "createChatInviteLink", { chat_id: chatId, member_limit: 1, ...opts });
 }
@@ -83,7 +106,7 @@ export async function createForumTopic(env, chatId, name) {
 }
 
 export async function deleteForumTopic(env, chatId, threadId) {
-  return callTelegramApi(env, "deleteForumTopic", { chat_id: chatId, message_thread_id: threadId });
+  return callTelegramApiWithRetry(env, "deleteForumTopic", { chat_id: chatId, message_thread_id: threadId });
 }
 
 export async function closeForumTopic(env, chatId, threadId) {
@@ -97,8 +120,8 @@ export async function setChatTitle(env, chatId, title) {
 /** Kicks (ban then immediately unban) so the user is removed now but free
  *  to rejoin via a fresh invite link if they purchase/renew later. */
 export async function kickChatMember(env, chatId, userId) {
-  await callTelegramApi(env, "banChatMember", { chat_id: chatId, user_id: userId });
-  await callTelegramApi(env, "unbanChatMember", { chat_id: chatId, user_id: userId, only_if_banned: true });
+  await callTelegramApiWithRetry(env, "banChatMember", { chat_id: chatId, user_id: userId });
+  await callTelegramApiWithRetry(env, "unbanChatMember", { chat_id: chatId, user_id: userId, only_if_banned: true });
 }
 
 /** Bans a user permanently (no auto-unban) — used for timed/permanent bans. */
