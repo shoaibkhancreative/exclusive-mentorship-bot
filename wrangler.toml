@@ -1,0 +1,11 @@
+name = "exclusive-mentorship-bot"   # তোমার worker এর নাম (Cloudflare dashboard এ যা দেখাবে)
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mentorship-orders"
+database_id = "f64e6859-c8b7-42d8-9309-77f1de580cce"
+
+[triggers]
+crons = ["0 0 * * *"]
