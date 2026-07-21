@@ -36,13 +36,13 @@ export function buildOrderChoiceCard(order, fullName) {
   return [
     `👋 <b>স্বাগতম, ${escapeHtml(fullName)}!</b>`,
     "",
-    "🎉 <b>আপনার অর্ডারটি গ্রহণ করা হয়েছে।</b>",
+    "🎉 <b>আপনার অর্ডার নিশ্চিত করা হয়েছে — আপনার সিট রিজার্ভ আছে।</b>",
     "",
     `📦 <b>প্যাকেজ:</b> ${escapeHtml(TIER_NAMES[order.plan] || order.plan)}`,
     order.addons ? `✨ <b>এর সাথে আছে:</b> ${escapeHtml(formatAddonsList(order.addons))}` : "",
     `💵 <b>পরিশোধযোগ্য পরিমাণ:</b> ${formatAmount(getOrderDueAmount(order))} USDT`,
     "",
-    "দ্রুত সাহায্য করার জন্য — নিচের কোনটি আপনার জন্য প্রযোজ্য?",
+    "অ্যাক্সেস দ্রুত চালু করতে — নিচের কোনটি এখন আপনার জন্য প্রযোজ্য?",
     "",
     "— NLT Exclusive Mentorship Team"
   ]
@@ -390,7 +390,7 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
     await sendMessage(
       env,
       order.telegram_user_id,
-      `❌ দুঃখিত, আমরা Order #${order.id}-এর পেমেন্ট প্রমাণ যাচাই করতে পারিনি। অনুগ্রহ করে সম্পূর্ণ লেনদেনের বিস্তারিত দেখা যায় এমন একটি স্পষ্ট স্ক্রিনশট/ডকুমেন্ট পাঠান।\n\n— NLT Exclusive Mentorship Team`
+      `❌ আমরা Order #${order.id}-এর পেমেন্ট প্রমাণটি যাচাই করতে পারিনি। অনুগ্রহ করে সম্পূর্ণ লেনদেনের বিস্তারিত স্পষ্টভাবে দেখা যায় এমন একটি স্ক্রিনশট/ডকুমেন্ট পাঠান — আমরা সঙ্গে সঙ্গে আবার রিভিউ করব।\n\n— NLT Exclusive Mentorship Team`
     );
 
     await sendMessage(env, env.ADMIN_CHAT_ID, `${buildOrderSummary(order)}\n\n❌ <b>Rejected</b> by admin.`, {
@@ -415,7 +415,7 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
       await sendMessage(
         env,
         order.telegram_user_id,
-        `✅ <b>Installment 1 নিশ্চিত হয়েছে!</b>\n\nএই যে আপনার Phase 1 অ্যাক্সেস লিঙ্ক (Part 1 ভিডিও):\n🔗 ${link}\n\nপূর্ণ অ্যাক্সেস, Priority Support, Live Q&A এবং সব add-on আনলক করতে অনুগ্রহ করে বাকি ${formatAmount(TIER2_SPLIT.installment2)} USDT <b>${formatDueDate(installment2DueAt)}</b> তারিখের মধ্যে পরিশোধ করুন।\n\n— NLT Exclusive Mentorship Team`,
+        `✅ <b>Installment 1 নিশ্চিত হয়েছে — স্বাগতম!</b>\n\nএই যে আপনার Phase 1 অ্যাক্সেস লিঙ্ক (Part 1 ভিডিও):\n🔗 ${link}\n\nপূর্ণ অ্যাক্সেস, Priority Support, Live Q&A এবং সব add-on আনলক করতে বাকি ${formatAmount(TIER2_SPLIT.installment2)} USDT <b>${formatDueDate(installment2DueAt)}</b> তারিখের মধ্যে পরিশোধ করুন।\n\n— NLT Exclusive Mentorship Team`,
         { parse_mode: "HTML", link_preview_options: { is_disabled: true } }
       );
     } else {
@@ -461,7 +461,7 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
 
   if (links.length > 0) {
     const linkList = links.map(([label, url]) => `🔗 ${label}: ${url}`).join("\n");
-    await sendMessage(env, order.telegram_user_id, `✅ <b>পেমেন্ট নিশ্চিত হয়েছে!</b>\n\nএই যে আপনার অ্যাক্সেস (single-use লিঙ্ক — শেয়ার করবেন না):\n\n${linkList}\n\n— NLT Exclusive Mentorship Team`, {
+    await sendMessage(env, order.telegram_user_id, `✅ <b>পেমেন্ট নিশ্চিত হয়েছে — আপনার যাত্রা শুরু!</b>\n\nএই যে আপনার এক্সক্লুসিভ অ্যাক্সেস (single-use লিঙ্ক — শেয়ার করবেন না):\n\n${linkList}\n\n— NLT Exclusive Mentorship Team`, {
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true }
     });
@@ -477,7 +477,7 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
 
   if (newSupportGroup !== oldSupportGroup) {
     const label = { [SUPPORT_GROUPS.consultation]: "VIP Consultation", [SUPPORT_GROUPS.priority]: "Priority", [SUPPORT_GROUPS.basic]: "Basic" }[newSupportGroup] || "General";
-    await sendMessage(env, order.telegram_user_id, `🎉 অভিনন্দন! আপনার সাপোর্ট লেভেল upgrade করা হয়েছে: <b>${label}</b>।\n\n— NLT Exclusive Mentorship Team`, { parse_mode: "HTML" });
+    await sendMessage(env, order.telegram_user_id, `🎉 অভিনন্দন! আপনার সাপোর্ট লেভেল এখন upgrade হয়ে গেছে: <b>${label}</b> — আরও দ্রুত ও অগ্রাধিকারভিত্তিক সহায়তা পাবেন।\n\n— NLT Exclusive Mentorship Team`, { parse_mode: "HTML" });
     await moveUserTicketToGroup(env, db, order.telegram_user_id, newSupportGroup);
   }
 

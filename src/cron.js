@@ -40,7 +40,7 @@ export async function checkExpiredSubscriptions(env, db) {
       }
 
       const addonName = ADDON_NAMES[sub.addon] || sub.addon;
-      await sendMessage(env, sub.telegram_user_id, `⏰ <b>অ্যাক্সেস মেয়াদোত্তীর্ণ হয়েছে</b>\n\nআপনার ${escapeHtml(addonName)}-এর মেয়াদ শেষ হয়ে গেছে। এটি সক্রিয় রাখতে নবায়ন করতে নিচে ট্যাপ করুন!\n\n— NLT Exclusive Mentorship Team`, {
+      await sendMessage(env, sub.telegram_user_id, `⏰ <b>অ্যাক্সেস মেয়াদোত্তীর্ণ হয়েছে</b>\n\nআপনার ${escapeHtml(addonName)}-এর মেয়াদ শেষ হয়ে গেছে, আর আপনার এক্সক্লুসিভ অ্যাক্সেস এখন সাময়িকভাবে বন্ধ। নিচে ট্যাপ করে এখনই নবায়ন করুন — সুযোগটি হাতছাড়া করবেন না!\n\n— NLT Exclusive Mentorship Team`, {
         parse_mode: "HTML",
         reply_markup: { inline_keyboard: [[{ text: "🛒 মেনু থেকে নবায়ন করুন", callback_data: "menu:buy" }]] }
       });
@@ -88,7 +88,7 @@ export async function checkSplitPaymentDeadlines(env, db) {
       await sendMessage(
         env,
         order.telegram_user_id,
-        `⏰ আপনার Installment 2-এর সময়সীমা শেষ হয়ে গেছে এবং Phase 1 অ্যাক্সেস সরিয়ে নেওয়া হয়েছে। আপনি এখনো এনরোলমেন্ট সম্পন্ন করতে চাইলে, প্রস্তুত হলে যেকোনো সময় এখানে পেমেন্ট স্ক্রিনশট পাঠান — আমরা তা রিভিউ করব।\n\n— NLT Exclusive Mentorship Team`
+        `⏰ <b>Installment 2-এর সময়সীমা পার হয়ে গেছে</b>\n\nনির্ধারিত সময়ে পরিশোধ না হওয়ায় আপনার Phase 1 অ্যাক্সেস সাময়িকভাবে সরিয়ে নেওয়া হয়েছে। এনরোলমেন্ট এখনো সম্পন্ন করতে চাইলে, প্রস্তুত হলে যেকোনো সময় এখানে পেমেন্ট স্ক্রিনশট পাঠান — আমরা অগ্রাধিকার ভিত্তিতে রিভিউ করব।\n\n— NLT Exclusive Mentorship Team`
       );
       await sendMessage(env, env.ADMIN_CHAT_ID, `⚠️ Order #${order.id}: Tier 2 split-payment customer missed the 30-day Installment 2 window. They've been removed from Phase 1 access. A late screenshot from them is still accepted and will route for review.`);
       continue;
@@ -101,7 +101,7 @@ export async function checkSplitPaymentDeadlines(env, db) {
         await sendMessage(
           env,
           order.telegram_user_id,
-          `🔔 রিমাইন্ডার: পূর্ণ অ্যাক্সেস, Priority Support, Live Q&A এবং সব add-on আনলক করতে অনুগ্রহ করে Order #${order.id}-এর বাকি Installment 2 (${formatAmount(TIER2_SPLIT.installment2)} USDT) <b>${formatDueDate(order.installment2_due_at)}</b> তারিখের মধ্যে পরিশোধ করুন। প্রস্তুত হলে এখানে পেমেন্ট প্রমাণ আপলোড করুন।\n\n— NLT Exclusive Mentorship Team`,
+          `🔔 <b>রিমাইন্ডার:</b> আপনার পূর্ণ অ্যাক্সেস, Priority Support, Live Q&A এবং সব add-on মাত্র একধাপ দূরে। Order #${order.id}-এর বাকি Installment 2 (${formatAmount(TIER2_SPLIT.installment2)} USDT) <b>${formatDueDate(order.installment2_due_at)}</b> তারিখের মধ্যে পরিশোধ করুন। প্রস্তুত হলে এখনই এখানে পেমেন্ট প্রমাণ আপলোড করুন।\n\n— NLT Exclusive Mentorship Team`,
           { parse_mode: "HTML" }
         );
       }
@@ -156,14 +156,14 @@ export async function checkStalledOrders(env, db) {
           await sendMessage(
             env,
             order.telegram_user_id,
-            `🔔 রিমাইন্ডার: আপনার <b>Order #${order.id}</b> (${planLabel}) এখনো শুরু করা হয়নি। প্রস্তুত হলে নিচের বাটনে ট্যাপ করে পেমেন্ট ডিটেইলস দেখুন — কোনো প্রশ্ন থাকলে সাপোর্ট অপশনটিও ব্যবহার করতে পারেন। আমরা এখানেই আছি।\n\n— NLT Exclusive Mentorship Team`,
+            `🔔 <b>রিমাইন্ডার:</b> আপনার <b>Order #${order.id}</b> (${planLabel}) এখনো শুরু হয়নি — আপনার সিট নিশ্চিত হওয়ার অপেক্ষায়। প্রস্তুত হলে নিচের বাটনে ট্যাপ করে পেমেন্ট ডিটেইলস দেখুন, কোনো প্রশ্ন থাকলে সাপোর্ট অপশনও ব্যবহার করতে পারেন। আমরা এখানেই আছি।\n\n— NLT Exclusive Mentorship Team`,
             { parse_mode: "HTML", reply_markup: { inline_keyboard: buildOrderChoiceKeyboard(order.id) } }
           );
         } else {
           await sendMessage(
             env,
             order.telegram_user_id,
-            `🔔 রিমাইন্ডার: আপনার <b>Order #${order.id}</b> (${planLabel}) এখনো সম্পন্ন হয়নি — মনে হচ্ছে পেমেন্ট করেছেন কিন্তু এখনো স্ক্রিনশট/প্রমাণ পাঠাননি। অনুগ্রহ করে এখানেই পেমেন্টের স্ক্রিনশট পাঠান, আমরা দ্রুত রিভিউ করে অ্যাক্সেস দিয়ে দেব। কোনো সমস্যা হলে নির্দ্বিধায় আমাদের জানান।\n\n— NLT Exclusive Mentorship Team`,
+            `🔔 <b>রিমাইন্ডার:</b> আপনার <b>Order #${order.id}</b> (${planLabel}) প্রায় সম্পন্ন — শুধু পেমেন্ট স্ক্রিনশটটাই বাকি। এখানেই পাঠিয়ে দিন, আমরা অগ্রাধিকার ভিত্তিতে রিভিউ করে সঙ্গে সঙ্গে অ্যাক্সেস চালু করে দেব। কোনো সমস্যা হলে নির্দ্বিধায় জানান।\n\n— NLT Exclusive Mentorship Team`,
             { parse_mode: "HTML" }
           );
         }

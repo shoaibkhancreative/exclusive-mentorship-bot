@@ -108,7 +108,7 @@ export const PAYMENT_INSTRUCTIONS_TEXT =
 // to the customer right after they submit payment proof so they know what
 // to expect instead of wondering if the bot actually received it.
 export const PAYMENT_REVIEW_ETA_HOURS = 24;
-export const PAYMENT_REVIEW_EXPECTATION_TEXT = `⏳ আমরা এটি যাচাই করে ${PAYMENT_REVIEW_ETA_HOURS} ঘণ্টার মধ্যে এখানে জানাবো।\n\n— NLT Exclusive Mentorship Team`;
+export const PAYMENT_REVIEW_EXPECTATION_TEXT = `⏳ ধন্যবাদ! আমাদের টিম এখন এটি যাচাই করছে এবং ${PAYMENT_REVIEW_ETA_HOURS} ঘণ্টার মধ্যে এখানে নিশ্চিতকরণ পাঠাবে।\n\n— NLT Exclusive Mentorship Team`;
 
 // ⚠️ Replace with your real website's checkout/pricing URL. Shown to
 // anyone who opens the bot directly (not via a site deep-link) and tries
@@ -123,13 +123,13 @@ export const SITE_ADDON_BIT_ORDER = ["i", "t", "a"];
 
 export const ACCOUNTABILITY_PROTOCOL_TEXT =
   "💡 <b>ICT Mastery Accountability Protocol</b>\n\n" +
-  "আমরা নগদ রিফান্ড দিই না — এর বদলে প্রতিটি Tier-এর সাথে থাকে আরও ভালো একটি প্রতিশ্রুতি: মেন্টরশিপ টিমের পক্ষ থেকে প্রকৃত commitment।\n\n" +
+  "আমরা নগদ রিফান্ড অফার করি না — কারণ আমরা এর চেয়ে শক্তিশালী কিছুতে বিশ্বাস করি: মেন্টরশিপ টিমের পক্ষ থেকে সরাসরি, ব্যক্তিগত commitment।\n\n" +
   "আপনি যদি:\n" +
   "1️⃣ কোর্সের ১০০% ভিডিও শেষ করেন\n" +
   "2️⃣ নিয়মিতভাবে Notion trading journal মেইনটেইন করেন\n" +
   "3️⃣ ডেমো অ্যাকাউন্টে ৩০টি লগ করা ট্রেড সম্পন্ন করেন\n\n" +
-  "...এবং তারপরও ফলাফল না দেখতে পান, তাহলে মেন্টরশিপ টিম সরাসরি এক সপ্তাহ ধরে আপনার লাইভ ট্রেডিং পর্যবেক্ষণ করবে এবং সমস্যাটা ঠিক কোথায় তা বের করতে একটি ফ্রি 1-on-1 Live Breakdown Session করবে।\n\n" +
-  "আপনার পরিস্থিতি জানাতে চাইলে যেকোনো সময় এখানে মেসেজ করুন, আমাদের টিম রিভিউ করবে।\n\n" +
+  "...এবং তারপরও কাঙ্ক্ষিত ফলাফল না পান, তাহলে আমাদের মেন্টরশিপ টিম সরাসরি এক সপ্তাহ ধরে আপনার লাইভ ট্রেডিং পর্যবেক্ষণ করবে এবং সমস্যাটা ঠিক কোথায়, তা বের করতে একটি ফ্রি 1-on-1 Live Breakdown Session করবে।\n\n" +
+  "আপনার পরিস্থিতি জানাতে যেকোনো সময় এখানে মেসেজ করুন — আমাদের টিম ব্যক্তিগতভাবে রিভিউ করবে।\n\n" +
   "— NLT Exclusive Mentorship Team";
 
 /** Statuses under which a split T2 order is in its "Installment 2" stage
