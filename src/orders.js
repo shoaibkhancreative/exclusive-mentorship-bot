@@ -6,7 +6,7 @@ import { CHANNELS, PAYMENT_REVIEW_EXPECTATION_TEXT, SPLIT_INSTALLMENT2_STATUSES,
 import { editOrSendMessage, forwardMessage, kickChatMember, safeAnswerCallbackQuery, sendMessage } from './telegram.js';
 import { escapeHtml, formatAddonsList, formatAmount, formatDueDate, getForwardableMediaKind, isRateLimited, notifyAdminError } from './utils.js';
 import { wipeUserData } from './db.js';
-import { getSupportGroupForUser, getUserBestTier, grantChannelInvite, grantEntitlementsForOrder, hasOpenPaymentOrder } from './entitlements.js';
+import { getSupportGroupForUser, getUserBestTier, grantChannelInvite, grantEntitlementsForOrder, hasOpenPaymentOrder, isBanned } from './entitlements.js';
 import { buildAdminChatButton, moveUserTicketToGroup, routeMessageToSupportThread } from './crm.js';
 
 export function buildOrderSummary(order) {
@@ -75,6 +75,11 @@ export async function handleIncomingMedia(env, db, message) {
   if (mediaRateLimitMs) {
     const waitSeconds = Math.max(1, Math.ceil(mediaRateLimitMs / 1000));
     await sendMessage(env, chatId, `⚠️ অনুগ্রহ করে একটু ধীরে করুন। ${waitSeconds} সেকেন্ড পর আবার চেষ্টা করুন।`);
+    return;
+  }
+
+  if (await isBanned(db, userId)) {
+    await sendMessage(env, chatId, "মেন্টরশিপ টিম আপনার অ্যাক্সেস বাতিল করেছে। এটি ভুল হয়েছে মনে করলে অনুগ্রহ করে সরাসরি সাপোর্টে যোগাযোগ করুন।");
     return;
   }
 

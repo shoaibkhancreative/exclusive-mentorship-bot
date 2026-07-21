@@ -111,9 +111,9 @@ export async function renderShopView(db, userId) {
   }
 
   // --- Standalone add-ons (never bought before, or currently lapsed) ---
-  if (!entitlements.permanentTemplates && !cartAddons.has("t")) {
-    buttons.push([{ text: `🗂 Setup Templates যোগ করুন — ${STANDALONE_ADDON_PRICES.t} USDT (permanent)`, callback_data: "cart:add_addon:t" }]);
-  }
+  // NOTE: "Setup Templates" (t) is intentionally NOT offered here — it's a
+  // permanent, one-time add-on sold only on the website. The cart callback
+  // handler below always rejects "t", so no button is rendered for it.
   if (!entitlements.activeAddons.has("i") && !cartAddons.has("i")) {
     buttons.push([{ text: `📈 Daily Market Insight নবায়ন করুন — ${STANDALONE_ADDON_PRICES.i} USDT (180 days)`, callback_data: "cart:add_addon:i" }]);
   }
