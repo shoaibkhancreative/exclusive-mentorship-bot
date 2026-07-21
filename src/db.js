@@ -3,6 +3,36 @@
 // ───────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────
+//  SCHEMA-ENSURE CACHE
+// ─────────────────────────────────────────────────────────────────────────
+//
+// ensureSchema() used to run its full battery of PRAGMA table_info checks,
+// CREATE TABLE statements, and ALTER TABLE ADD COLUMN attempts on EVERY
+// single incoming request (~35+ extra D1 queries per message/callback),
+// even though the schema essentially never changes once the Worker isolate
+// is warm. A Cloudflare Worker isolate can serve many requests before it's
+// recycled, so this module-level flag lets ensureSchema() do its real work
+// only once per isolate lifetime (the cold start), and become a no-op
+// (single boolean check, zero queries) on every request after that.
+//
+// Both src/index.js (fetch()) and src/cron.js (runScheduledChecks()) import
+// ensureSchema from this same module, so — because ES modules are
+// singletons — they automatically share this exact cache; no separate
+// wiring needed. Whichever of the two runs first on a given isolate does
+// the real schema work, and the other one sees schemaEnsured === true and
+// returns immediately.
+//
+// The flag is reset to false (via resetSchemaCache()) anywhere a table
+// actually gets DROPped, so the very next ensureSchema() call fully
+// rebuilds everything instead of incorrectly short-circuiting against a
+// schema that no longer exists.
+let schemaEnsured = false;
+
+export function resetSchemaCache() {
+  schemaEnsured = false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 //  DATABASE SCHEMA
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -44,10 +74,20 @@ export async function dropTransientTableIfShapeMismatch(db, table, expectedColum
   const isMissingAColumn = expectedColumns.some((col) => !existingColumns.has(col));
   if (isMissingAColumn) {
     await db.prepare(`DROP TABLE IF EXISTS ${table}`).run();
+    // The table this cache was guarding no longer exists in the shape
+    // ensureSchema() last verified, so the cache must not be trusted
+    // until ensureSchema() runs (or finishes running) again.
+    resetSchemaCache();
   }
 }
 
 export async function ensureSchema(db) {
+  // Cold-start-once cache: after the first successful run on this Worker
+  // isolate, every later call (from index.js's fetch() or cron.js's
+  // runScheduledChecks()) is a single boolean check and nothing else — no
+  // PRAGMA, no CREATE TABLE, no ALTER TABLE. See the cache comment above.
+  if (schemaEnsured) return;
+
   // ── Self-healing for transient session tables ──────────────────────────
   // Must run BEFORE the CREATE TABLE IF NOT EXISTS batch below: if one of
   // these three tables exists but is missing an expected column (e.g. an
@@ -153,7 +193,45 @@ export async function ensureSchema(db) {
                                            -- webhook redelivery
         processed_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
-    `)
+    `),
+
+    // ── Indexes ────────────────────────────────────────────────────────
+    // Added right after table creation so a brand-new database gets them
+    // immediately, and an existing database picks them up self-healingly
+    // (CREATE INDEX IF NOT EXISTS is as idempotent as CREATE TABLE IF NOT
+    // EXISTS). Chosen by grepping every WHERE clause across the codebase
+    // for columns that aren't already a table's PRIMARY KEY (tickets.
+    // telegram_user_id, carts.telegram_user_id, pending_media.
+    // telegram_user_id, admin_state.state_key, and processed_updates.
+    // update_id are all PRIMARY KEYs already and don't need one):
+    //
+    //   orders — looked up by telegram_user_id constantly (crm.js order
+    //   history, entitlements.js access checks, shop.js duplicate-order
+    //   guards, orders.js review flow), by status alone or combined with
+    //   plan/is_split (admin.js dashboard, cron.js stalled/expiry sweeps),
+    //   so both single-column and the two real composite access patterns
+    //   get covered.
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_orders_telegram_user_id ON orders(telegram_user_id)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_orders_status_plan ON orders(status, plan)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_orders_is_split_status ON orders(is_split, status)`),
+    //   subscriptions — looked up by telegram_user_id (entitlements.js),
+    //   by active+expires_at together (cron.js expiry sweep, admin.js
+    //   dashboard's active-subscriber count), and by addon+active+
+    //   expires_at together (admin.js broadcast-by-addon targeting).
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_subscriptions_telegram_user_id ON subscriptions(telegram_user_id)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_subscriptions_active_expires_at ON subscriptions(active, expires_at)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_subscriptions_addon_active_expires_at ON subscriptions(addon, active, expires_at)`),
+    //   tickets — telegram_user_id is already the PRIMARY KEY, but
+    //   crm.js's admin-group-reply handler looks tickets up the OTHER
+    //   direction, by (group_id, thread_id), which needs its own index.
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_tickets_group_thread ON tickets(group_id, thread_id)`),
+    //   banned_users — telegram_user_id is already the PRIMARY KEY;
+    //   cron.js's daily unban sweep filters by banned_until instead.
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_banned_users_banned_until ON banned_users(banned_until)`),
+    //   processed_updates — update_id is already the PRIMARY KEY;
+    //   pruneProcessedUpdates() below deletes by processed_at instead.
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_processed_updates_processed_at ON processed_updates(processed_at)`)
   ]);
 
   // ── Self-healing migration ──────────────────────────────────────────────
@@ -215,6 +293,12 @@ export async function ensureSchema(db) {
   await addColumnIfMissing(db, "admin_state", "created_at", "TEXT DEFAULT CURRENT_TIMESTAMP");
 
   await addColumnIfMissing(db, "processed_updates", "processed_at", "TEXT DEFAULT CURRENT_TIMESTAMP");
+
+  // Everything above completed without throwing — tables, columns, and
+  // indexes are all confirmed present. Cache that fact so every later
+  // ensureSchema() call on this isolate (from either fetch() or
+  // runScheduledChecks()) short-circuits instead of repeating all of this.
+  schemaEnsured = true;
 }
 
 /** Best-effort ALTER TABLE ADD COLUMN — silently ignores the error SQLite

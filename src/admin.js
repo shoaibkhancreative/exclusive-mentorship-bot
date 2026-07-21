@@ -5,7 +5,7 @@
 import { ADDON_NAMES, CHANNELS, CHAT_TITLES, SUPPORT_GROUPS } from './constants.js';
 import { deleteForumTopic, editOrSendMessage, kickChatMember, safeAnswerCallbackQuery, sendMessage, setChatTitle } from './telegram.js';
 import { escapeHtml, formatAmount, notifyAdminError, sleep } from './utils.js';
-import { ensureSchema, wipeUserData } from './db.js';
+import { ensureSchema, resetSchemaCache, wipeUserData } from './db.js';
 import { channelForExpiredAddon, createSubscription } from './entitlements.js';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -14,15 +14,36 @@ import { channelForExpiredAddon, createSubscription } from './entitlements.js';
 
 export async function buildStatsDashboard(db) {
   const nowIso = new Date().toISOString();
-  const [usersRow, revenueRow, todayRevenueRow, pendingRow, t2Row, t3Row, subsRow] = await Promise.all([
-    db.prepare(`SELECT COUNT(*) as count FROM (SELECT telegram_user_id FROM orders UNION SELECT telegram_user_id FROM tickets)`).first(),
-    db.prepare(`SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE status = 'confirmed'`).first(),
-    db.prepare(`SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE status = 'confirmed' AND date(confirmed_at) = date('now')`).first(),
-    db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status IN ('pending','pending_review_2','pending_review_2_late')`).first(),
-    db.prepare(`SELECT COUNT(DISTINCT telegram_user_id) as count FROM orders WHERE status = 'confirmed' AND plan = 'T2'`).first(),
-    db.prepare(`SELECT COUNT(DISTINCT telegram_user_id) as count FROM orders WHERE status = 'confirmed' AND plan = 'T3' AND date(confirmed_at) >= date('now','start of month')`).first(),
-    db.prepare(`SELECT COUNT(DISTINCT telegram_user_id) as count FROM subscriptions WHERE active = 1 AND expires_at > ?`).bind(nowIso).first()
+  // Was 7 separate awaited db.prepare(...).first() calls fired via
+  // Promise.all() — 7 individual round-trips to D1. D1's batch API DOES
+  // support read (SELECT) statements, not just writes: db.batch() sends
+  // every statement in the array to D1 as ONE HTTP call and runs them
+  // together in an implicit transaction, so this collapses those 7
+  // round-trips into 1. This matters independently of D1's rows-read
+  // billing (which is the same either way) because it also cuts 6
+  // subrequests off this single Worker invocation, which is what counts
+  // against Workers' per-invocation subrequest limit.
+  //
+  // The one shape difference from Promise.all()+.first(): db.batch()
+  // returns an array of full D1Result objects (each with a `.results`
+  // array of rows), not a single row each — so we pull `.results[0]`
+  // ourselves below instead of relying on .first()'s built-in unwrapping.
+  const [usersResult, revenueResult, todayRevenueResult, pendingResult, t2Result, t3Result, subsResult] = await db.batch([
+    db.prepare(`SELECT COUNT(*) as count FROM (SELECT telegram_user_id FROM orders UNION SELECT telegram_user_id FROM tickets)`),
+    db.prepare(`SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE status = 'confirmed'`),
+    db.prepare(`SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE status = 'confirmed' AND date(confirmed_at) = date('now')`),
+    db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status IN ('pending','pending_review_2','pending_review_2_late')`),
+    db.prepare(`SELECT COUNT(DISTINCT telegram_user_id) as count FROM orders WHERE status = 'confirmed' AND plan = 'T2'`),
+    db.prepare(`SELECT COUNT(DISTINCT telegram_user_id) as count FROM orders WHERE status = 'confirmed' AND plan = 'T3' AND date(confirmed_at) >= date('now','start of month')`),
+    db.prepare(`SELECT COUNT(DISTINCT telegram_user_id) as count FROM subscriptions WHERE active = 1 AND expires_at > ?`).bind(nowIso)
   ]);
+  const usersRow = usersResult.results[0];
+  const revenueRow = revenueResult.results[0];
+  const todayRevenueRow = todayRevenueResult.results[0];
+  const pendingRow = pendingResult.results[0];
+  const t2Row = t2Result.results[0];
+  const t3Row = t3Result.results[0];
+  const subsRow = subsResult.results[0];
 
   // NOTE on revenue accuracy: a split T2 order is a SINGLE orders row that
   // only ever transitions to status = 'confirmed' once, at the moment
@@ -395,10 +416,18 @@ export async function performFullWipe(env, db, adminChatId) {
       db.prepare(`DROP TABLE IF EXISTS admin_state`),
       db.prepare(`DROP TABLE IF EXISTS processed_updates`)
     ]);
-    // ensureSchema() recreates every dropped table (including
-    // processed_updates via its own CREATE TABLE IF NOT EXISTS), so the
+    // ensureSchema() is now cached to only do real work once per Worker
+    // isolate (see db.js) — without this reset, an isolate that had
+    // already ensured the schema before this wipe would see its cached
+    // flag still set to true and skip re-creating the tables we just
+    // dropped, leaving the DB schema-less until the isolate happened to
+    // recycle. Resetting the cache here forces the call right below to
+    // actually run its CREATE TABLE / CREATE INDEX / ALTER TABLE battery
+    // again, so it recreates every dropped table (including
+    // processed_updates via its own CREATE TABLE IF NOT EXISTS) — the
     // very next webhook call after a wipe is handled on a fully rebuilt,
-    // empty schema — no manual follow-up needed.
+    // empty schema, no manual follow-up needed.
+    resetSchemaCache();
     await ensureSchema(db);
 
     await sendMessage(
