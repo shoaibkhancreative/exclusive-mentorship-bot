@@ -402,13 +402,18 @@ export async function handleUserMgmtRemoveConfirm(env, db, callbackQuery, userId
 export async function handleUserMgmtRemoveDo(env, db, callbackQuery, userId) {
   await safeAnswerCallbackQuery(env, callbackQuery.id, "Removing...");
   const failed = await purgeUser(env, db, userId);
+  // purgeUser deletes the user's forum topic as part of the purge, so the
+  // thread this callback came from (callbackQuery.message.message_thread_id)
+  // no longer exists by the time we get here. Sending the confirmation into
+  // that now-deleted thread is what caused "message thread not found" —
+  // post it to the group's General chat instead (no message_thread_id).
   await sendMessage(
     env,
     callbackQuery.message.chat.id,
     failed.length === 0
       ? `🚫 User <code>${escapeHtml(userId)}</code> removed from everywhere and their data wiped.`
       : `🚫 User <code>${escapeHtml(userId)}</code> data wiped, but couldn't kick them from: ${failed.join(", ")}.`,
-    { parse_mode: "HTML", message_thread_id: callbackQuery.message.message_thread_id }
+    { parse_mode: "HTML" }
   );
   await safeAnswerCallbackQuery(env, callbackQuery.id, "User removed.");
 }
