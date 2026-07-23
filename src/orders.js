@@ -381,7 +381,12 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
     reply_markup: { inline_keyboard: [] }
   });
 
-  const fromUser = { id: order.telegram_user_id, username: order.telegram_username };
+  const fromUser = {
+    id: order.telegram_user_id,
+    username: order.telegram_username,
+    first_name: order.telegram_first_name,
+    last_name: order.telegram_last_name
+  };
   const chatButton = await buildAdminChatButton(env, db, fromUser);
   const chatButtonRow = chatButton ? [chatButton] : [];
 

@@ -244,10 +244,10 @@ export async function handleCartCheckout(env, db, callbackQuery, userId, chatId,
 
   const insertResult = await db
     .prepare(
-      `INSERT INTO orders (telegram_user_id, telegram_username, plan, addons, total, is_split, is_upgrade, upgrade_from, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_photo')`
+      `INSERT INTO orders (telegram_user_id, telegram_username, telegram_first_name, telegram_last_name, plan, addons, total, is_split, is_upgrade, upgrade_from, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_photo')`
     )
-    .bind(userId, callbackQuery.from.username || "", plan, addonsField, total, isSplit, isUpgrade, upgradeFrom)
+    .bind(userId, callbackQuery.from.username || "", callbackQuery.from.first_name || "", callbackQuery.from.last_name || "", plan, addonsField, total, isSplit, isUpgrade, upgradeFrom)
     .run();
 
   // No separate "mode" flag to flip here: the order row created above is
@@ -406,14 +406,14 @@ export async function startOrderFromSitePayload(env, db, message, parsed) {
   // on the `orders` table, fixed the same atomic-conditional way).
   const insertResult = await db
     .prepare(
-      `INSERT INTO orders (telegram_user_id, telegram_username, plan, addons, total, is_split, is_upgrade, status)
-       SELECT ?, ?, ?, ?, ?, ?, 0, 'awaiting_choice'
+      `INSERT INTO orders (telegram_user_id, telegram_username, telegram_first_name, telegram_last_name, plan, addons, total, is_split, is_upgrade, status)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, 0, 'awaiting_choice'
        WHERE NOT EXISTS (
          SELECT 1 FROM orders WHERE telegram_user_id = ? AND status IN
          ('awaiting_choice','awaiting_photo','pending','phase1_active','pending_review_2','phase1_expired','pending_review_2_late')
        )`
     )
-    .bind(userId, message.from.username || "", parsed.packageKey, parsed.addons, total, parsed.isSplit ? 1 : 0, userId)
+    .bind(userId, message.from.username || "", message.from.first_name || "", message.from.last_name || "", parsed.packageKey, parsed.addons, total, parsed.isSplit ? 1 : 0, userId)
     .run();
 
   if (!insertResult.meta.changes) {

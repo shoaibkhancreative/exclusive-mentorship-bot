@@ -105,6 +105,8 @@ export async function ensureSchema(db) {
         id                   INTEGER PRIMARY KEY AUTOINCREMENT,
         telegram_user_id     TEXT,
         telegram_username    TEXT,
+        telegram_first_name  TEXT,
+        telegram_last_name   TEXT,
         plan                 TEXT,   -- T1 | T2 | T3 | ADDONS
         addons               TEXT,   -- letters this order grants (i/t/a/r/c)
         total                REAL,
@@ -253,6 +255,8 @@ export async function ensureSchema(db) {
   // since they're transient session data and one of them (admin_state)
   // has state_key as its PRIMARY KEY.
   await addColumnIfMissing(db, "orders", "telegram_username", "TEXT");
+  await addColumnIfMissing(db, "orders", "telegram_first_name", "TEXT");
+  await addColumnIfMissing(db, "orders", "telegram_last_name", "TEXT");
   await addColumnIfMissing(db, "orders", "plan", "TEXT");
   await addColumnIfMissing(db, "orders", "addons", "TEXT");
   await addColumnIfMissing(db, "orders", "total", "REAL");
