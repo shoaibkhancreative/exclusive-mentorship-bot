@@ -97,7 +97,7 @@ export async function ensureSchema(db) {
   // existing table.
   await dropTransientTableIfShapeMismatch(db, "admin_state", ["state_key", "chat_id", "thread_id", "action", "payload", "created_at"]);
   await dropTransientTableIfShapeMismatch(db, "carts", ["telegram_user_id", "tier_action", "tier", "split", "addons"]);
-  await dropTransientTableIfShapeMismatch(db, "pending_media", ["telegram_user_id", "file_id", "kind", "message_id"]);
+  await dropTransientTableIfShapeMismatch(db, "pending_media", ["telegram_user_id", "file_id", "kind", "message_id", "reply_to_message_id"]);
 
   await db.batch([
     db.prepare(`
@@ -155,12 +155,48 @@ export async function ensureSchema(db) {
     `),
     db.prepare(`
       CREATE TABLE IF NOT EXISTS pending_media (
-        telegram_user_id TEXT PRIMARY KEY,
-        file_id          TEXT,
-        kind             TEXT,
-        message_id       INTEGER
+        telegram_user_id    TEXT PRIMARY KEY,
+        file_id             TEXT,
+        kind                TEXT,
+        message_id          INTEGER,
+        reply_to_message_id INTEGER  -- message_id (in the user's own DM) this
+                                      -- upload was itself a reply to, if any —
+                                      -- carried through so the eventual
+                                      -- copyMessage into the support thread
+                                      -- (see routeMessageToSupportThread) can
+                                      -- still be posted as a reply there too.
       )
     `),
+    // message_map — remembers that "this message in the user's private
+    // chat" and "this copy of it inside the support-group ticket thread"
+    // are the same logical message, in both directions. This is what makes
+    // two things possible that forwardMessage() alone can never support:
+    //   1. Reply-threading: when routing a NEW message that is itself a
+    //      reply to an earlier one, we look up the earlier message's twin
+    //      on the other side and pass it as copyMessage's reply target, so
+    //      the reply relationship is visibly preserved on BOTH sides
+    //      instead of arriving as a disconnected new message.
+    //   2. Reaction sync: a message_reaction update only ever tells us the
+    //      chat_id + message_id it happened on — this table is how we find
+    //      which message on the OTHER side to mirror that reaction onto.
+    // Every row is created at most once (copyMessage always mints a brand
+    // new message_id, so a given user_chat_id+user_message_id or
+    // group_id+group_message_id pair can never legitimately repeat), which
+    // is why recordMessageMap() below uses a plain INSERT ... ON CONFLICT
+    // DO NOTHING rather than an upsert.
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS message_map (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_chat_id      TEXT,
+        user_message_id   INTEGER,
+        group_id          TEXT,
+        group_message_id  INTEGER,
+        thread_id         INTEGER,
+        created_at        TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+    db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_message_map_user ON message_map(user_chat_id, user_message_id)`),
+    db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_message_map_group ON message_map(group_id, group_message_id)`),
     db.prepare(`
       CREATE TABLE IF NOT EXISTS subscriptions (
         id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -298,6 +334,13 @@ export async function ensureSchema(db) {
 
   await addColumnIfMissing(db, "processed_updates", "processed_at", "TEXT DEFAULT CURRENT_TIMESTAMP");
 
+  await addColumnIfMissing(db, "message_map", "user_chat_id", "TEXT");
+  await addColumnIfMissing(db, "message_map", "user_message_id", "INTEGER");
+  await addColumnIfMissing(db, "message_map", "group_id", "TEXT");
+  await addColumnIfMissing(db, "message_map", "group_message_id", "INTEGER");
+  await addColumnIfMissing(db, "message_map", "thread_id", "INTEGER");
+  await addColumnIfMissing(db, "message_map", "created_at", "TEXT DEFAULT CURRENT_TIMESTAMP");
+
   // Everything above completed without throwing — tables, columns, and
   // indexes are all confirmed present. Cache that fact so every later
   // ensureSchema() call on this isolate (from either fetch() or
@@ -348,6 +391,49 @@ export async function claimUpdateId(db, updateId) {
 export async function pruneProcessedUpdates(db) {
   const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
   await db.prepare(`DELETE FROM processed_updates WHERE processed_at < ?`).bind(cutoff).run();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  MESSAGE_MAP — user-DM ⇄ support-group-thread message pairing
+//  (used for reply-threading via copyMessage and for mirroring reactions —
+//  see crm.js: routeMessageToSupportThread, handleAdminGroupReply,
+//  handleMessageReaction)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Records that `userMessageId` (in the user's private chat) and
+ *  `groupMessageId` (its copy inside the support-group ticket thread) are
+ *  the same logical message. Safe to call exactly once per copy — a given
+ *  (user_chat_id, user_message_id) or (group_id, group_message_id) pair is
+ *  never reused, since copyMessage always mints a fresh message_id, so a
+ *  unique-constraint collision here would only ever indicate a genuine
+ *  duplicate (e.g. a retried webhook) and is silently ignored either way. */
+export async function recordMessageMap(db, { userChatId, userMessageId, groupId, groupMessageId, threadId = null }) {
+  await db
+    .prepare(
+      `INSERT INTO message_map (user_chat_id, user_message_id, group_id, group_message_id, thread_id) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT DO NOTHING`
+    )
+    .bind(String(userChatId), userMessageId, String(groupId), groupMessageId, threadId)
+    .run();
+}
+
+/** Given a message in the USER's private chat, returns its twin inside the
+ *  support-group ticket thread (or null if this message was never routed /
+ *  has no twin — e.g. it's older than this feature, or delivery failed). */
+export async function getGroupSideOfMessage(db, userChatId, userMessageId) {
+  return db
+    .prepare(`SELECT group_id, group_message_id, thread_id FROM message_map WHERE user_chat_id = ? AND user_message_id = ?`)
+    .bind(String(userChatId), userMessageId)
+    .first();
+}
+
+/** Given a message inside a support-group ticket thread, returns its twin
+ *  in the user's private chat (or null if it has none). */
+export async function getUserSideOfMessage(db, groupId, groupMessageId) {
+  return db
+    .prepare(`SELECT user_chat_id, user_message_id FROM message_map WHERE group_id = ? AND group_message_id = ?`)
+    .bind(String(groupId), groupMessageId)
+    .first();
 }
 
 /** Deletes ALL orders/subscriptions/cart/pending-media rows for a user so

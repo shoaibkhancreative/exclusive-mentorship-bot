@@ -33,7 +33,15 @@
  *
  *    curl "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
  *      -d "url=https://<your-worker-subdomain>.workers.dev" \
- *      -d "secret_token=<WEBHOOK_SECRET>"
+ *      -d "secret_token=<WEBHOOK_SECRET>" \
+ *      -d 'allowed_updates=["message","callback_query","message_reaction"]'
+ *
+ *  ⚠️ "message_reaction" is NOT in Telegram's default allowed_updates set —
+ *  if you re-run setWebhook later without this array, reaction sync will
+ *  silently stop working even though everything else keeps running. Also,
+ *  the bot must be an ADMIN in each support group for it to receive
+ *  message_reaction updates about messages there (private-chat reactions
+ *  don't have this restriction).
  *
  *  CRON TRIGGER (required for expiring add-ons / split-payment reminders):
  *  add this to wrangler.toml:
@@ -139,7 +147,7 @@ import { getForwardableMediaKind, isRateLimited, notifyAdminError } from './util
 import { claimUpdateId, ensureSchema } from './db.js';
 import { isBanned } from './entitlements.js';
 import { handleAdminCommand, handleAdminMenuCallback, handleBroadcastCallback, handleBroadcastCommand, handleStatsCommand, setupChannelNames, tryHandleAdminStateInput } from './admin.js';
-import { handleAdminGroupReply, handleUserMgmtCallback, handleUserTextMessage } from './crm.js';
+import { handleAdminGroupReply, handleMessageReaction, handleUserMgmtCallback, handleUserTextMessage } from './crm.js';
 import { handleDeleteUserCallback, handleIncomingMedia, handleKeepUserCallback, handleMediaClassificationCallback, handleOrderChoiceCallback, handleOrderReviewCallback } from './orders.js';
 import { handleCartCallback, handleMenuCallback, handleMenuCommand, handleRefundCommand, handleStartCommand, renderMainMenu } from './shop.js';
 import { runScheduledChecks } from './cron.js';
@@ -234,6 +242,17 @@ export async function routeUpdate(env, db, update, ctx) {
     return;
   }
 
+  if (update.message_reaction) {
+    // NOTE: this update type is NOT part of Telegram's default
+    // allowed_updates set — it will never arrive here unless the webhook
+    // was registered with "message_reaction" explicitly included in
+    // allowed_updates (see the setWebhook example near the top of this
+    // file). It also requires the bot to be an admin in a support group
+    // for reactions in that group to be reported at all.
+    await handleMessageReaction(env, db, update.message_reaction);
+    return;
+  }
+
   const message = update.message;
   if (!message) return;
 
@@ -291,7 +310,7 @@ export default {
 
       await ensureSchema(env.DB);
       const update = await request.json();
-      console.log(`Update ${update.update_id}: ${update.message ? "message" : update.callback_query ? "callback_query" : "other"}`);
+      console.log(`Update ${update.update_id}: ${update.message ? "message" : update.callback_query ? "callback_query" : update.message_reaction ? "message_reaction" : "other"}`);
       await routeUpdate(env, env.DB, update, ctx);
 
       return new Response("OK", { status: 200 });

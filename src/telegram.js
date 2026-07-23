@@ -34,6 +34,30 @@ export async function forwardMessage(env, chatId, fromChatId, messageId, extra =
   return callTelegramApi(env, "forwardMessage", { chat_id: chatId, from_chat_id: fromChatId, message_id: messageId, ...extra });
 }
 
+/** Like forwardMessage, but the result is a fresh, independent message
+ *  (no "Forwarded from" header, no link back to the original) that can
+ *  carry its own reply_parameters — unlike forwardMessage, which can
+ *  never be posted "as a reply to" something in the destination chat.
+ *  This is what routeMessageToSupportThread / handleAdminGroupReply use
+ *  instead of forwardMessage so reply threads survive the hop between the
+ *  user's DM and the support-group ticket thread. Returns a MessageId
+ *  object (`{ message_id }` only — not a full Message), which is all
+ *  that's needed to record the pairing in message_map afterwards. */
+export async function copyMessage(env, chatId, fromChatId, messageId, extra = {}) {
+  return callTelegramApi(env, "copyMessage", { chat_id: chatId, from_chat_id: fromChatId, message_id: messageId, ...extra });
+}
+
+/** Sets (or clears, with reaction = []) the BOT's own reaction on a
+ *  message. NOTE — Bot API limitation: there is no method that lets a bot
+ *  set a reaction "as" a specific human user, only as itself. So this is
+ *  used to MIRROR a reaction that happened on one side onto the twin
+ *  message on the other side (crm.js: handleMessageReaction), not to
+ *  reproduce who reacted. `reaction` is an array of ReactionType objects,
+ *  e.g. [{ type: "emoji", emoji: "👍" }]. */
+export async function setMessageReaction(env, chatId, messageId, reaction = []) {
+  return callTelegramApi(env, "setMessageReaction", { chat_id: chatId, message_id: messageId, reaction });
+}
+
 export async function answerCallbackQuery(env, callbackQueryId, text = "", showAlert = false) {
   return callTelegramApi(env, "answerCallbackQuery", { callback_query_id: callbackQueryId, text, show_alert: showAlert });
 }

@@ -3,10 +3,11 @@
 // ───────────────────────────────────────────────────────────────────────────
 
 import { ADDON_NAMES, CHANNELS, SUPPORT_GROUPS, TIER_NAMES } from './constants.js';
-import { banChatMemberUntil, callTelegramApi, closeForumTopic, createForumTopic, deleteForumTopic, editMessageReplyMarkup, forwardMessage, safeAnswerCallbackQuery, sendMessage } from './telegram.js';
+import { banChatMemberUntil, callTelegramApi, closeForumTopic, copyMessage, createForumTopic, deleteForumTopic, editMessageReplyMarkup, forwardMessage, safeAnswerCallbackQuery, sendMessage, setMessageReaction } from './telegram.js';
 import { escapeHtml, formatAmount, getForwardableMediaKind, notifyAdminError, stripSupergroupPrefix } from './utils.js';
 import { getActiveSubscriptionDetails, getSupportGroupForUser } from './entitlements.js';
 import { clearAdminState, purgeUser, setAdminState } from './admin.js';
+import { getGroupSideOfMessage, getUserSideOfMessage, recordMessageMap } from './db.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 //  CRM / SUPPORT HELPERS  (ticket threads, profile card, chat button)
@@ -153,10 +154,20 @@ export async function buildAdminChatButton(env, db, fromUser) {
  *   3. The customer always gets a clear reply either way — either their
  *      message went to their normal support thread, or (on any failure
  *      above) they're told the team has been notified directly.
+ *
+ * Uses copyMessage (not forwardMessage) so the copy inside the ticket
+ * thread is a normal, independent message that can carry reply_parameters
+ * — if `replyToMessageId` is given (the message_id, in the USER's own
+ * chat, that this one is itself a reply to) and that earlier message has
+ * a known twin in the group (via message_map), the copy is posted as a
+ * reply to that twin, keeping the thread intact on both sides. The new
+ * copy's id is then recorded in message_map so later replies/reactions to
+ * IT can be routed the same way.
  */
-export async function routeMessageToSupportThread(env, db, fromUser, chatId, messageId, mediaKind = null) {
+export async function routeMessageToSupportThread(env, db, fromUser, chatId, messageId, mediaKind = null, replyToMessageId = null) {
   const groupId = await getSupportGroupForUser(db, String(fromUser.id));
   const ticket = await getOrCreateTicketThread(env, db, fromUser, groupId);
+  const chatIdStr = String(chatId);
 
   const displayName = [fromUser.first_name, fromUser.last_name].filter(Boolean).join(" ") || "Unknown";
   const who = fromUser.username ? `${displayName} (@${fromUser.username})` : `${displayName} (ID ${fromUser.id})`;
@@ -198,10 +209,32 @@ export async function routeMessageToSupportThread(env, db, fromUser, chatId, mes
         reply_markup: { inline_keyboard: buildUserManagementKeyboard(fromUser.id) }
       });
     }
-    await forwardMessage(env, groupId, chatId, messageId, { message_thread_id: ticket.threadId });
+    // If this message is itself a reply to an earlier one, look up that
+    // earlier message's twin on the group side so the copy below can be
+    // posted as a genuine reply there too, keeping the thread intact.
+    let replyParams;
+    if (replyToMessageId) {
+      const twin = await getGroupSideOfMessage(db, chatIdStr, replyToMessageId);
+      if (twin) replyParams = { message_id: twin.group_message_id };
+    }
+
+    const copy = await copyMessage(env, groupId, chatId, messageId, {
+      message_thread_id: ticket.threadId,
+      ...(replyParams ? { reply_parameters: replyParams } : {})
+    });
+
+    // Remember the pairing so a later reply to THIS message (from either
+    // side) or a reaction on it can be routed/mirrored correctly.
+    await recordMessageMap(db, {
+      userChatId: chatIdStr,
+      userMessageId: messageId,
+      groupId,
+      groupMessageId: copy.message_id,
+      threadId: ticket.threadId
+    });
   } catch (err) {
     console.error(`routeMessageToSupportThread: failed to deliver into ticket thread for user ${fromUser.id}:`, err);
-    await notifyAdminError(env, err, `routeMessageToSupportThread: forwardMessage into ticket thread failed for user ${fromUser.id}`, { mediaKind });
+    await notifyAdminError(env, err, `routeMessageToSupportThread: copyMessage into ticket thread failed for user ${fromUser.id}`, { mediaKind });
     const delivered = await fallbackToAdmin("delivery into the existing support thread failed");
     if (!delivered) {
       await sendMessage(env, chatId, "⚠️ এই মুহূর্তে আপনার মেসেজ পাঠানো যাচ্ছে না। একটু পর আবার চেষ্টা করুন, অথবা সরাসরি আমাদের সাথে যোগাযোগ করুন।");
@@ -212,7 +245,8 @@ export async function routeMessageToSupportThread(env, db, fromUser, chatId, mes
 }
 
 export async function handleUserTextMessage(env, db, message) {
-  await routeMessageToSupportThread(env, db, message.from, message.chat.id, message.message_id);
+  const replyToMessageId = message.reply_to_message ? message.reply_to_message.message_id : null;
+  await routeMessageToSupportThread(env, db, message.from, message.chat.id, message.message_id, null, replyToMessageId);
 }
 
 /** Admin message inside a support group's topic thread — routed back to the customer. */
@@ -232,17 +266,35 @@ export async function handleAdminGroupReply(env, db, message) {
   if (!ticket) return;
 
   const mediaKind = getForwardableMediaKind(message);
+  if (!mediaKind && !message.text) {
+    // Nothing we know how to relay (e.g. a poll, a location, etc.) —
+    // nothing to send, nothing to report as failed.
+    return;
+  }
 
   try {
-    if (mediaKind) {
-      await forwardMessage(env, ticket.telegram_user_id, groupId, message.message_id);
-    } else if (message.text) {
-      await sendMessage(env, ticket.telegram_user_id, message.text);
-    } else {
-      // Nothing we know how to relay (e.g. a poll, a location, etc.) —
-      // nothing to send, nothing to report as failed.
-      return;
+    // copyMessage (instead of forwardMessage/sendMessage) is used for
+    // BOTH text and media replies so that, if this admin message is
+    // itself a reply to an earlier one in the thread, we can look up that
+    // earlier message's twin in the user's private chat (via message_map)
+    // and post the copy there as a genuine reply too — keeping the
+    // thread intact on both sides, the same way routeMessageToSupportThread
+    // does it for the user -> group direction.
+    let replyParams;
+    if (message.reply_to_message) {
+      const twin = await getUserSideOfMessage(db, groupId, message.reply_to_message.message_id);
+      if (twin) replyParams = { message_id: twin.user_message_id };
     }
+
+    const copy = await copyMessage(env, ticket.telegram_user_id, groupId, message.message_id, replyParams ? { reply_parameters: replyParams } : {});
+
+    await recordMessageMap(db, {
+      userChatId: String(ticket.telegram_user_id),
+      userMessageId: copy.message_id,
+      groupId,
+      groupMessageId: message.message_id,
+      threadId
+    });
   } catch (err) {
     console.error(`handleAdminGroupReply: failed to deliver ${mediaKind || "text"} reply to user ${ticket.telegram_user_id}:`, err);
     await sendMessage(
@@ -254,6 +306,53 @@ export async function handleAdminGroupReply(env, db, message) {
       console.error(`handleAdminGroupReply: even the failure notice could not be posted for user ${ticket.telegram_user_id}:`, notifyErr);
     });
   }
+}
+
+/**
+ * Handles a `message_reaction` update by mirroring the reaction onto the
+ * twin message on the OTHER side of a routed conversation (user DM <->
+ * support-group ticket thread), using message_map to find that twin.
+ *
+ * Guards against infinite ping-pong: setMessageReaction below is itself an
+ * action that generates its own message_reaction update on the side it was
+ * just applied to. Without the botId check, that echo would come back
+ * here and get mirrored again. It converges on its own after one extra
+ * round trip either way (Telegram doesn't fire an update for a reaction
+ * that isn't actually changing), but skipping it outright avoids the
+ * wasted API calls and is clearer to reason about. The bot's own numeric
+ * user id is just the digits before the ":" in BOT_TOKEN — no extra
+ * getMe() call needed.
+ *
+ * Only "emoji" and "custom_emoji" reaction types are mirrored. "paid"
+ * (Telegram Star) reactions are user-funded and can't be reproduced by a
+ * bot acting as itself, so those are left alone.
+ */
+export async function handleMessageReaction(env, db, reactionUpdate) {
+  const botId = Number(String(env.BOT_TOKEN || "").split(":")[0]);
+  if (reactionUpdate.user && Number(reactionUpdate.user.id) === botId) return;
+
+  const chatId = String(reactionUpdate.chat.id);
+  const messageId = reactionUpdate.message_id;
+  const newReaction = (reactionUpdate.new_reaction || []).filter((r) => r.type === "emoji" || r.type === "custom_emoji");
+
+  // The reaction could have happened on either side of a routed pairing —
+  // try "this is the user's side" first, then "this is the group's side".
+  const groupSide = await getGroupSideOfMessage(db, chatId, messageId);
+  if (groupSide) {
+    await setMessageReaction(env, groupSide.group_id, groupSide.group_message_id, newReaction).catch((err) => {
+      console.error(`handleMessageReaction: failed to mirror reaction from user chat ${chatId}/${messageId} onto group message:`, err);
+    });
+    return;
+  }
+
+  const userSide = await getUserSideOfMessage(db, chatId, messageId);
+  if (userSide) {
+    await setMessageReaction(env, userSide.user_chat_id, userSide.user_message_id, newReaction).catch((err) => {
+      console.error(`handleMessageReaction: failed to mirror reaction from group ${chatId}/${messageId} onto user message:`, err);
+    });
+  }
+  // If neither lookup matches, this message predates the message_map
+  // feature (or was never routed) — nothing to mirror onto, silently skip.
 }
 
 // ─────────────────────────────────────────────────────────────────────────
