@@ -4,7 +4,7 @@
 
 import { ADDON_NAMES, CHANNELS, CHAT_TITLES, SUPPORT_GROUPS } from './constants.js';
 import { deleteForumTopic, editOrSendMessage, kickChatMember, safeAnswerCallbackQuery, sendMessage, setChatTitle } from './telegram.js';
-import { escapeHtml, formatAmount, notifyAdminError, sleep } from './utils.js';
+import { escapeHtml, formatAmount, interleaveByKey, notifyAdminError, runPacedByChat, sleep } from './utils.js';
 import { ensureSchema, resetSchemaCache, wipeUserData } from './db.js';
 import { channelForExpiredAddon, createSubscription } from './entitlements.js';
 
@@ -379,37 +379,69 @@ export async function performFullWipe(env, db, adminChatId) {
 
     const allUserIds = new Set([...(orderUsers || []).map((r) => r.telegram_user_id), ...(ticketRows || []).map((r) => r.telegram_user_id)]);
 
+    // Every (userId, chatId) pair is one kickChatMember call. With many
+    // users and only a handful of channels/support groups, most calls are
+    // concentrated on the SAME small set of chats — a flat delay between
+    // calls (however short) can't respect Telegram's per-chat rate limit
+    // (~20 actions/min/chat) once enough calls pile up on one chat, and
+    // calls just start failing 429 faster than the single built-in retry
+    // in callTelegramApiWithRetry can absorb. interleaveByKey() spreads
+    // consecutive calls across DIFFERENT chats first, and runPacedByChat()
+    // then only makes a call wait on ITS OWN chat's last call, so kicks to
+    // distinct chats fire back-to-back while same-chat kicks get properly
+    // spaced out — no more, no less than Telegram actually requires.
     const allChats = [...Object.values(CHANNELS), ...Object.values(SUPPORT_GROUPS)];
     let kickFailures = 0;
     const failedKicks = []; // e.g. "user 123 in chat -100456"
-    for (const userId of allUserIds) {
-      for (const chatId of allChats) {
-        try {
-          await kickChatMember(env, chatId, Number(userId));
-        } catch (err) {
-          kickFailures++;
-          failedKicks.push(`user ${userId} in ${chatId}`);
-        }
-        // Pacing delay between calls — kickChatMember already retries once
-        // on 429 (via callTelegramApiWithRetry in telegram.js), but with
-        // many users × many chats fired back-to-back we can still queue up
-        // past Telegram's ~20 actions/min/chat limit faster than a single
-        // retry can absorb. This spreads the calls out to begin with.
-        await sleep(75);
+    const kickJobs = interleaveByKey(
+      [...allUserIds].flatMap((userId) => allChats.map((chatId) => ({ userId, chatId }))),
+      (job) => job.chatId
+    );
+    await runPacedByChat(kickJobs, (job) => job.chatId, async (job) => {
+      try {
+        await kickChatMember(env, job.chatId, Number(job.userId));
+      } catch (err) {
+        kickFailures++;
+        failedKicks.push(`user ${job.userId} in ${job.chatId}`);
       }
-    }
+    });
 
+    // Same reasoning for forum-topic deletion: every user's topic lives in
+    // one of only 4 support groups, so with any real number of users most
+    // deleteForumTopic calls target the same handful of chats. Pace these
+    // per-chat too — this is what was actually causing topics to survive a
+    // wipe (silent 429s beyond the single retry, previously only visible if
+    // an admin scrolled the failure report), not a missing deletion call.
     let topicFailures = 0;
-    const failedTopics = []; // e.g. "group -100456 / thread 42"
-    for (const ticket of ticketRows || []) {
+    let failedTicketRows = []; // rows still pending deletion after the current pass
+    const topicJobs = interleaveByKey(ticketRows || [], (t) => t.group_id);
+    await runPacedByChat(topicJobs, (t) => t.group_id, async (ticket) => {
       try {
         await deleteForumTopic(env, ticket.group_id, ticket.thread_id);
       } catch (err) {
-        topicFailures++;
-        failedTopics.push(`${ticket.group_id} / thread ${ticket.thread_id}`);
+        failedTicketRows.push(ticket);
       }
-      await sleep(75);
+    });
+    // One paced retry pass over whatever's still left — now that calls are
+    // properly spaced per chat, a first-pass failure is much more likely to
+    // be a transient blip (or a 429 whose retry_after outlasted the single
+    // retry inside callTelegramApiWithRetry) than a real permanent failure,
+    // so it's worth giving those a second, equally-paced shot before
+    // reporting them to the admin as needing manual cleanup.
+    if (failedTicketRows.length > 0) {
+      const retryJobs = interleaveByKey(failedTicketRows, (t) => t.group_id);
+      const stillFailed = [];
+      await runPacedByChat(retryJobs, (t) => t.group_id, async (ticket) => {
+        try {
+          await deleteForumTopic(env, ticket.group_id, ticket.thread_id);
+        } catch (err) {
+          stillFailed.push(ticket);
+        }
+      });
+      failedTicketRows = stillFailed;
     }
+    topicFailures = failedTicketRows.length;
+    const failedTopics = failedTicketRows.map((t) => `${t.group_id} / thread ${t.thread_id}`); // e.g. "group -100456 / thread 42"
 
     // Every table this bot creates must be dropped here — including
     // processed_updates (webhook-idempotency dedupe table), which was
