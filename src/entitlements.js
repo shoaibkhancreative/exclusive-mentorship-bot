@@ -191,16 +191,20 @@ export async function grantEntitlementsForOrder(env, db, order, { alreadyHadCore
       const link = await grantChannelInvite(env, CHANNELS.liveqa, `Order #${order.id} - Live Q&A`);
       if (link) links.push(["🎙 Bi-Weekly Live Q&A", link]);
       else failedTargets.push(CHANNELS.liveqa);
-      // Priority Support group membership itself is granted via an invite
-      // link too, so the customer can actually get back in after ever
-      // having been kicked for a prior lapse.
-      const priorityLink = await grantChannelInvite(env, SUPPORT_GROUPS.priority, `Order #${order.id} - Priority Support`);
-      if (priorityLink) links.push(["⭐ Priority Support Group", priorityLink]);
-      else failedTargets.push(SUPPORT_GROUPS.priority);
+      // Priority Support is NOT an invite-link/membership grant — it's
+      // topic-based, same as General/Basic Support. getSupportGroupForUser()
+      // already routes the customer's messages into a topic inside
+      // SUPPORT_GROUPS.priority (owner/admin-only group) as soon as their
+      // "r" subscription is active, so nothing needs to be sent here.
     } else if (letter === "c") {
-      const link = await grantChannelInvite(env, SUPPORT_GROUPS.consultation, `Order #${order.id} - VIP Consultation`);
-      if (link) links.push(["🌟 VIP 1-on-1 Consultation Group", link]);
-      else failedTargets.push(SUPPORT_GROUPS.consultation);
+      // VIP Consultation Support is also NOT an invite-link/membership
+      // grant — it's topic-based, same as Priority/Basic/General. Since
+      // getSupportGroupForUser() checks active.has("c") before
+      // active.has("r"), a Tier 3 customer (who gets both "r" and "c")
+      // lands straight in the Consultation topic, not the Priority one.
+      // The actual 1-on-1 call itself is a separate, human-scheduled
+      // thing — hence the admin ping below — but no chat-group link is
+      // ever sent to the customer for it.
       await sendMessage(
         env,
         env.ADMIN_CHAT_ID,
@@ -218,7 +222,12 @@ export async function grantEntitlementsForOrder(env, db, order, { alreadyHadCore
 export function channelForExpiredAddon(letter) {
   if (letter === "i") return [CHANNELS.insight];
   if (letter === "a") return [CHANNELS.archive];
-  if (letter === "r") return [CHANNELS.liveqa, SUPPORT_GROUPS.priority];
-  if (letter === "c") return [SUPPORT_GROUPS.consultation];
+  // Priority Support and VIP Consultation Support (SUPPORT_GROUPS.priority /
+  // .consultation) are topic-based, not membership-based — the customer is
+  // never actually added to either group, so there's nothing to kick them
+  // from. Once "r"/"c" expires, getSupportGroupForUser() simply stops
+  // routing them there.
+  if (letter === "r") return [CHANNELS.liveqa];
+  if (letter === "c") return [];
   return [];
 }
