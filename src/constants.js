@@ -42,6 +42,22 @@ export const TIER_NAMES = { T1: "Recorded Class", T2: "Live Mentorship", T3: "1-
 export const TIER_ORDER = ["T1", "T2", "T3"]; // low → high, for upgrade math
 export const TIER_PRICE = { T1: 25, T2: 39, T3: 149 };
 
+// Fixed upgrade prices, keyed "FROM_TO" (e.g. "T1_T2"). If a pair is listed
+// here, its upgrade price is this fixed amount — NOT (TIER_PRICE[to] -
+// TIER_PRICE[from]). Any pair NOT listed here still falls back to that
+// tier-price-difference calculation (see getUpgradePrice() below). Add more
+// entries here to fix other paths (e.g. "T1_T3", "T2_T3") the same way.
+export const TIER_UPGRADE_PRICE_OVERRIDES = { T1_T2: 19 };
+
+/** Price to upgrade from one tier to a higher one. Uses the fixed override
+ *  above if one exists for this exact pair; otherwise falls back to the
+ *  difference between the two tiers' full prices. */
+export function getUpgradePrice(fromTier, toTier) {
+  const override = TIER_UPGRADE_PRICE_OVERRIDES[`${fromTier}_${toTier}`];
+  if (override != null) return override;
+  return Math.max(0, (TIER_PRICE[toTier] || 0) - (TIER_PRICE[fromTier] || 0));
+}
+
 // Add-on letter codes used in orders.addons / subscriptions.addon:
 //   i = Daily Market Insight        (180 days)
 //   t = Setup Templates             (permanent, never expires)

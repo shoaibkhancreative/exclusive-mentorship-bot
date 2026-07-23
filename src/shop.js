@@ -2,7 +2,7 @@
 //  Cart + shop view + website deep-link checkout + top-level menu/start commands
 // ───────────────────────────────────────────────────────────────────────────
 
-import { ACCOUNTABILITY_PROTOCOL_TEXT, ADDON_NAMES, CONSULTATION_RENEWAL_PRICE_USD, MAIN_REPLY_KEYBOARD, PAYMENT_INSTRUCTIONS_TEXT, PRIORITY_RENEWAL_PRICE_USD, RENEWAL_PRICES, SITE_ADDON_BIT_ORDER, SITE_CHECKOUT_URL, STANDALONE_ADDON_PRICES, SUPPORT_GROUPS, TIER2_SPLIT, TIER_BUNDLED_ADDONS, TIER_NAMES, TIER_ORDER, TIER_PRICE } from './constants.js';
+import { ACCOUNTABILITY_PROTOCOL_TEXT, ADDON_NAMES, CONSULTATION_RENEWAL_PRICE_USD, getUpgradePrice, MAIN_REPLY_KEYBOARD, PAYMENT_INSTRUCTIONS_TEXT, PRIORITY_RENEWAL_PRICE_USD, RENEWAL_PRICES, SITE_ADDON_BIT_ORDER, SITE_CHECKOUT_URL, STANDALONE_ADDON_PRICES, SUPPORT_GROUPS, TIER2_SPLIT, TIER_BUNDLED_ADDONS, TIER_NAMES, TIER_ORDER, TIER_PRICE } from './constants.js';
 import { editOrSendMessage, safeAnswerCallbackQuery, sendMessage } from './telegram.js';
 import { escapeHtml, formatAddonDuration, formatAddonsList, formatAmount, formatDueDate } from './utils.js';
 import { getOpenSplitOrder, getSupportGroupForUser, getUserBestTier, getUserEntitlements, hasAnyOrderHistory, hasEverHadAddon, isBanned } from './entitlements.js';
@@ -39,7 +39,7 @@ export function priceForCartAddon(letter) {
 export function calculateCartTotal(cart, currentBestTier = null) {
   let total = 0;
   if (cart.tier_action === "upgrade") {
-    total += Math.max(0, (TIER_PRICE[cart.tier] || 0) - (TIER_PRICE[currentBestTier] || 0));
+    total += getUpgradePrice(currentBestTier, cart.tier);
   }
   for (const letter of parseCartAddons(cart)) total += priceForCartAddon(letter);
   return total;
@@ -84,7 +84,7 @@ export async function renderShopView(db, userId) {
   const cartLines = [];
 
   if (cart.tier_action === "upgrade") {
-    const diff = Math.max(0, (TIER_PRICE[cart.tier] || 0) - (TIER_PRICE[entitlements.bestTier] || 0));
+    const diff = getUpgradePrice(entitlements.bestTier, cart.tier);
     cartLines.push(`⬆️ Upgrade ${entitlements.bestTier} → ${cart.tier} — ${diff} USDT`);
   }
   for (const letter of cartAddons) {
@@ -105,7 +105,7 @@ export async function renderShopView(db, userId) {
   if (!cart.tier_action && entitlements.bestTier) {
     const idx = TIER_ORDER.indexOf(entitlements.bestTier);
     for (const higher of TIER_ORDER.slice(idx + 1)) {
-      const diff = TIER_PRICE[higher] - TIER_PRICE[entitlements.bestTier];
+      const diff = getUpgradePrice(entitlements.bestTier, higher);
       buttons.push([{ text: `⬆️ Upgrade to ${higher} (${TIER_NAMES[higher]}) — ${diff} USDT`, callback_data: `cart:upgrade_tier:${higher}` }]);
     }
   }
