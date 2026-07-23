@@ -132,9 +132,46 @@ export async function getUserEntitlements(db, userId) {
   return { hasCore: Boolean(bestTier), bestTier, permanentTemplates, activeAddons, activeDetails };
 }
 
-/** Which of the 4 support groups this user's messages should route to. */
+/** Reads any admin-pinned manual support-group override for this user
+ *  (set via the "🔁 Change Support Level" usermgmt flow), or null if none
+ *  is set / the user has no ticket row yet. */
+export async function getManualSupportOverride(db, userId) {
+  const row = await db.prepare(`SELECT support_override FROM tickets WHERE telegram_user_id = ?`).bind(userId).first();
+  return row?.support_override || null;
+}
+
+/** Pins a user's support routing to an exact group, overriding whatever
+ *  getSupportGroupForUser() would otherwise compute from their real
+ *  entitlements. Used only by the admin's manual "Change Support Level"
+ *  action — an actual order confirmation never calls this, it clears the
+ *  override instead (see clearManualSupportOverride). Requires a tickets
+ *  row to already exist (true for anyone reachable via the usermgmt
+ *  keyboard, since that keyboard only ever appears inside an
+ *  already-created ticket thread). */
+export async function setManualSupportOverride(db, userId, groupId) {
+  await db.prepare(`UPDATE tickets SET support_override = ? WHERE telegram_user_id = ?`).bind(groupId, userId).run();
+}
+
+/** Clears any manual override so routing goes back to being computed from
+ *  real entitlements. Called whenever a real order confirmation changes
+ *  the user's actual tier/add-ons, so a genuine purchase always wins over
+ *  a stale admin pin instead of being silently masked by it. Safe to call
+ *  even if the user has no tickets row yet (no-op). */
+export async function clearManualSupportOverride(db, userId) {
+  await db.prepare(`UPDATE tickets SET support_override = NULL WHERE telegram_user_id = ?`).bind(userId).run();
+}
+
+/** Which of the 4 support groups this user's messages should route to.
+ *  A banned user always routes to General regardless of any pin. Otherwise,
+ *  an admin-pinned manual override (see setManualSupportOverride) takes
+ *  priority over the computed entitlement-based group — this is what
+ *  makes "🔁 Change Support Level" actually stick for future messages,
+ *  instead of the very next message silently recomputing the old group
+ *  and re-creating a topic there. */
 export async function getSupportGroupForUser(db, userId) {
   if (await isBanned(db, userId)) return SUPPORT_GROUPS.general;
+  const override = await getManualSupportOverride(db, userId);
+  if (override) return override;
   const active = await getActiveTimedAddons(db, userId);
   if (active.has("c")) return SUPPORT_GROUPS.consultation;
   if (active.has("r")) return SUPPORT_GROUPS.priority;

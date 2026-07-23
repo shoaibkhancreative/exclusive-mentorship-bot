@@ -141,7 +141,17 @@ export async function ensureSchema(db) {
       CREATE TABLE IF NOT EXISTS tickets (
         telegram_user_id TEXT PRIMARY KEY,
         group_id         TEXT,
-        thread_id        INTEGER
+        thread_id        INTEGER,
+        support_override TEXT  -- SUPPORT_GROUPS.* value when an admin has
+                                -- manually pinned this user's routing via
+                                -- "🔁 Change Support Level" (usermgmt:setlevel).
+                                -- NULL means "no manual pin — compute the
+                                -- group from real entitlements as usual."
+                                -- See getSupportGroupForUser(). Cleared
+                                -- automatically the next time a real order
+                                -- confirmation changes the user's actual
+                                -- entitlements, so a purchase always wins
+                                -- over a stale manual pin.
       )
     `),
     db.prepare(`
@@ -323,6 +333,7 @@ export async function ensureSchema(db) {
 
   await addColumnIfMissing(db, "tickets", "group_id", "TEXT");
   await addColumnIfMissing(db, "tickets", "thread_id", "INTEGER");
+  await addColumnIfMissing(db, "tickets", "support_override", "TEXT");
 
   await addColumnIfMissing(db, "banned_users", "banned_until", "TEXT");
 

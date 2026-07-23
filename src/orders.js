@@ -6,7 +6,7 @@ import { CHANNELS, PAYMENT_REVIEW_EXPECTATION_TEXT, SPLIT_INSTALLMENT2_STATUSES,
 import { editOrSendMessage, forwardMessage, kickChatMember, safeAnswerCallbackQuery, sendMessage } from './telegram.js';
 import { escapeHtml, formatAddonsList, formatAmount, formatDueDate, getForwardableMediaKind, isRateLimited, notifyAdminError } from './utils.js';
 import { wipeUserData } from './db.js';
-import { getSupportGroupForUser, getUserBestTier, grantChannelInvite, grantEntitlementsForOrder, hasOpenPaymentOrder, isBanned } from './entitlements.js';
+import { clearManualSupportOverride, getSupportGroupForUser, getUserBestTier, grantChannelInvite, grantEntitlementsForOrder, hasOpenPaymentOrder, isBanned } from './entitlements.js';
 import { buildAdminChatButton, moveUserTicketToGroup, routeMessageToSupportThread } from './crm.js';
 
 export function buildOrderSummary(order) {
@@ -453,6 +453,14 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
   // 'awaiting_photo').
 
   const { links, failedTargets } = await grantEntitlementsForOrder(env, db, order, { alreadyHadCore });
+
+  // A real purchase always wins over a leftover manual admin pin (see
+  // setManualSupportOverride in crm.js) — otherwise a customer who was
+  // manually moved to, say, Priority Support at some point in the past
+  // could buy a brand-new tier/add-on here and getSupportGroupForUser()
+  // would keep returning the old pinned group forever, silently masking
+  // their actual new entitlement.
+  await clearManualSupportOverride(db, order.telegram_user_id);
   const newSupportGroup = await getSupportGroupForUser(db, order.telegram_user_id);
 
   // Only kick from the temporary Phase 1 holding channel when this

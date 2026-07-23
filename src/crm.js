@@ -5,7 +5,7 @@
 import { ADDON_NAMES, CHANNELS, SUPPORT_GROUPS, TIER_NAMES } from './constants.js';
 import { banChatMemberUntil, callTelegramApi, closeForumTopic, copyMessage, createForumTopic, deleteForumTopic, editMessageReplyMarkup, forwardMessage, safeAnswerCallbackQuery, sendMessage, setMessageReaction } from './telegram.js';
 import { escapeHtml, formatAmount, getForwardableMediaKind, notifyAdminError, stripSupergroupPrefix } from './utils.js';
-import { getActiveSubscriptionDetails, getSupportGroupForUser } from './entitlements.js';
+import { getActiveSubscriptionDetails, getSupportGroupForUser, setManualSupportOverride } from './entitlements.js';
 import { clearAdminState, purgeUser, setAdminState } from './admin.js';
 import { getGroupSideOfMessage, getUserSideOfMessage, recordMessageMap } from './db.js';
 
@@ -589,6 +589,13 @@ export async function handleUserMgmtSetLevel(env, db, callbackQuery, userId, lev
   }
   await safeAnswerCallbackQuery(env, callbackQuery.id, "Moving...");
   await moveUserTicketToGroup(env, db, userId, target.groupId);
+  // Pin the routing decision itself, not just the ticket's current
+  // location: without this, the very next message from the user calls
+  // getSupportGroupForUser() -> recomputes from real entitlements (which
+  // this manual move didn't change), sees it no longer matches the ticket
+  // we just moved to, and creates ANOTHER new topic back in the old
+  // (computed) group — silently undoing this move.
+  await setManualSupportOverride(db, userId, target.groupId);
   await sendMessage(env, callbackQuery.message.chat.id, `🔁 <code>${escapeHtml(userId)}</code> moved to <b>${target.label}</b> support.`, {
     parse_mode: "HTML",
     message_thread_id: callbackQuery.message.message_thread_id
