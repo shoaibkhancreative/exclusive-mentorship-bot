@@ -346,6 +346,15 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
   // customer's first-ever purchase.
   const alreadyHadCore = action === "confirm" ? Boolean(await getUserBestTier(db, order.telegram_user_id)) : false;
 
+  // Same reasoning as alreadyHadCore above: getSupportGroupForUser() ->
+  // getUserBestTier() only looks at status = 'confirmed' rows. The
+  // full-grant atomic UPDATE below flips THIS order to 'confirmed'
+  // immediately, so reading the user's "old" support group any later
+  // would count this very order as pre-existing history and make
+  // old/new support group look identical (silently skipping the
+  // upgrade notification) even on a customer's very first purchase.
+  const oldSupportGroup = action === "confirm" ? await getSupportGroupForUser(db, order.telegram_user_id) : null;
+
   // The REAL race protection: every transition below is an atomic
   // conditional UPDATE, gated on the order still being in EXACTLY the
   // status we just read. If two requests for the same order both reach
@@ -443,7 +452,6 @@ export async function handleOrderReviewCallback(env, db, callbackQuery) {
   // support automatically (unless/until a new order puts them back into
   // 'awaiting_photo').
 
-  const oldSupportGroup = await getSupportGroupForUser(db, order.telegram_user_id);
   const { links, failedTargets } = await grantEntitlementsForOrder(env, db, order, { alreadyHadCore });
   const newSupportGroup = await getSupportGroupForUser(db, order.telegram_user_id);
 
